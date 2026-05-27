@@ -13,6 +13,7 @@ history.txt
 test_temp/
 build/
 install/
+TODO/
 
 compile_commands.json
 
