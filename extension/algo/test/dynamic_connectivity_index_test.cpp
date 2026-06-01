@@ -1,7 +1,10 @@
+#include "common/dynamic_connectivity_index_factory.h"
 #include "common/stree_index.h"
 #include "common/dtree_index.h"
 
 #include "gtest/gtest.h"
+
+#include <stdexcept>
 
 using namespace kuzu::algo_extension;
 
@@ -96,3 +99,45 @@ TEST(DynamicConnectivityIndexTest, DTreeIndexDeleteTreeEdgeUsesNonTreeReplacemen
 
     EXPECT_TRUE(index.connected(1, 3));
 }
+
+TEST(DynamicConnectivityIndexFactoryTest, CreatesSTreeIndexByName) {
+    auto index = createDynamicConnectivityIndex("stree");
+
+    ASSERT_NE(index, nullptr);
+    EXPECT_EQ(index->getName(), "stree");
+
+    index->insertEdge(1, 2);
+    index->insertEdge(2, 3);
+
+    EXPECT_TRUE(index->connected(1, 3));
+    EXPECT_FALSE(index->connected(1, 4));
+}
+
+TEST(DynamicConnectivityIndexFactoryTest, CreatesDTreeIndexByName) {
+    auto index = createDynamicConnectivityIndex("dtree");
+
+    ASSERT_NE(index, nullptr);
+    EXPECT_EQ(index->getName(), "dtree");
+
+    index->insertEdge(1, 2);
+    index->insertEdge(2, 3);
+
+    EXPECT_TRUE(index->connected(1, 3));
+    EXPECT_FALSE(index->connected(1, 4));
+}
+
+TEST(DynamicConnectivityIndexFactoryTest, SupportsCaseInsensitiveMethodNames) {
+    auto streeIndex = createDynamicConnectivityIndex("STree");
+    auto dtreeIndex = createDynamicConnectivityIndex("DTree");
+
+    ASSERT_NE(streeIndex, nullptr);
+    ASSERT_NE(dtreeIndex, nullptr);
+
+    EXPECT_EQ(streeIndex->getName(), "stree");
+    EXPECT_EQ(dtreeIndex->getName(), "dtree");
+}
+
+TEST(DynamicConnectivityIndexFactoryTest, ThrowsOnUnknownMethodName) {
+    EXPECT_THROW(createDynamicConnectivityIndex("unknown"), std::runtime_error);
+}
+
