@@ -4,6 +4,7 @@ add_library(algo_extension_common
         in_mem_gds_utils.cpp
         stree.cpp
         dtree.cpp
+        dynamic_connectivity_index_factory.cpp
         )
 
 set(ALGO_EXTENSION_OBJECT_FILES
