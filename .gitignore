@@ -86,3 +86,6 @@ dataset/binary-demo
 dataset/databases/tinysnb
 dataset/ldbc-1/csv
 extension/algo/benchmark/results/
+
+# local folders for large datasets
+local_traces/
