@@ -1,11 +1,45 @@
-# Description
+````markdown
+## Summary
 
-Please include a summary of the changes and the related issue (if applicable).
-Please also include relevant motivation and context.
+Briefly describe what this PR adds or changes.
 
-Fixes #(issue)
-Associated docs (issue or PR):
+## Motivation
 
-# Contributor agreement
+Explain why this change is needed.
 
-- [ ] I have read and agree to the [Contributor Agreement](https://github.com/kuzudb/kuzu/blob/master/CLA.md).
+## Changes
+
+- 
+- 
+- 
+
+## Tests
+
+Commands run:
+
+```bash
+# Paste build/test commands here
+```
+
+Tested behavior:
+
+- 
+- 
+- 
+
+## Known limitations
+
+- 
+
+## Reviewer guide
+
+Suggested review order:
+
+1. 
+2. 
+3. 
+
+## Related issues
+
+Closes #
+````

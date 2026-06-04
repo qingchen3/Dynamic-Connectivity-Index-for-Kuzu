@@ -1,27 +1,101 @@
-# Contributing
+# File 1: `CONTRIBUTING.md`
 
-Welcome! We are excited that you are interested in contributing to Kuzu.
-Before submitting your contribution though, please make sure to take a moment and read through the following guidelines.
+````markdown
+# Contributing Guide
 
-Join our project's [Discord community](https://discord.gg/VtX2gw9Rug) for real-time communication with the core team and other contributors.
-If you have a question or need help, feel free to ask in the appropriate channel or create an issue.
+This repository develops dynamic connectivity indexes for graph database systems, with an initial focus on integrating STree and DTree-style data structures into the Kuzu/LadybugDB ecosystem.
 
-## Code of Conduct
+The project is currently research-oriented, but the codebase should be maintained with upstream-quality engineering standards.
 
-This project and everyone participating in it is governed by a [Code of Conduct](CODE_OF_CONDUCT.md).
-By participating, you are expected to uphold this code. 
-Please report unacceptable behavior to [contact@kuzudb.com](mailto:contact@kuzudb.com).
+## Development workflow
 
-## Agreeing to the Contributor Agreement
-When you contribute code, you affirm that the contribution is your original work and that you have read and agreed to the project's [Contributor Agreement (CLA) document  here](CLA.md). 
-Whether or not you state this explicitly, by submitting any copyrighted material via pull request, email, or other means you affirm that you agree to the [CLA](CLA.md) and warrant that you have the legal authority to do so.
+Please use the following workflow:
 
-## General Steps and Guidelines to Contribute
-* Discuss your intended changes with the core team on Github or Discord, so we can assign appropriate issue(s) for you to work on.
-* Do not commit/push directly to the master branch. Instead, create a fork and open a pull request.
-* While you're working on the issue, please merge frequently with the master branch.
-* All pull requests with new features and bug fixes should be covered by proper tests.
-* Avoid large pull requests - they are much less likely to be merged as they are incredibly hard to review.
-* We reserve full and final discretion over whether or not we will merge a pull request. Adhering to these guidelines is not a complete guarantee that your pull request will be merged.
+1. Create or select an issue.
+2. Create a focused feature branch from `master`.
+3. Keep the pull request small and reviewable.
+4. Add or update tests for code changes.
+5. Document benchmark commands and results when relevant.
+6. Open a pull request into `master`.
+7. Keep `master` buildable and testable.
 
-Thank you for your contribution to Kuzu! We're grateful for your time and effort, and we look forward to working with you.
+Do not develop directly on `master`.
+
+## Branch naming
+
+Use descriptive branch names:
+
+```text
+feature/dynamic-connectivity-interface
+feature/stree-index-wrapper
+feature/dtree-index-wrapper
+bench/randomized-runner
+docs/benchmark-trace-format
+```
+
+Avoid generic branch names such as:
+
+```text
+dev
+update
+test
+new-code
+```
+
+## Pull request expectations
+
+Each pull request should have:
+
+- A clear title.
+- A focused scope.
+- A short motivation.
+- A summary of changes.
+- Test commands and results.
+- Known limitations.
+- Suggested reviewer guide.
+
+Large pull requests should be split into smaller ones whenever possible.
+
+## Testing
+
+For code changes, include the exact commands used to build and test the project.
+
+Example:
+
+```bash
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+For benchmark-related changes, include:
+
+- Dataset or trace used.
+- Number of repetitions.
+- Validation mode.
+- Summary statistics generated.
+- Whether benchmark result files are committed or intentionally excluded.
+
+## Benchmark results
+
+Generated benchmark results should not be committed by default.
+
+Commit only:
+
+- Benchmark scripts.
+- Trace format documentation.
+- Small sanity traces.
+- Result summarization tools.
+
+Large generated result directories should be ignored unless there is a clear reason to include them.
+
+## Code review principles
+
+A good pull request should allow a reviewer to understand:
+
+1. What problem this PR solves.
+2. What files changed.
+3. How correctness was tested.
+4. What is intentionally left for future work.
+5. Whether the change is safe to merge.
+
+The goal is to make this repository easy to review, maintain, and eventually upstream into Kuzu/LadybugDB-style graph database systems.
