@@ -7,10 +7,25 @@ from collections import defaultdict
 from pathlib import Path
 
 
-METRICS = [
+TIMING_METRICS = [
     "insert_avg_us",
     "delete_avg_us",
 ]
+
+DIAGNOSTIC_METRICS = [
+    "delete_total_count",
+    "delete_tree_edge_count",
+    "delete_non_tree_edge_count",
+    "delete_noop_count",
+    "tree_delete_ratio",
+    "replacement_search_count",
+    "replacement_found_count",
+    "replacement_not_found_count",
+    "avg_replacement_candidates_scanned",
+    "max_replacement_candidates_scanned",
+]
+
+METRICS = TIMING_METRICS + DIAGNOSTIC_METRICS
 
 
 def parse_float(value):
@@ -62,10 +77,14 @@ def main():
     with summary_path.open(newline="") as f:
         reader = csv.DictReader(f)
 
+        fieldnames = set(reader.fieldnames or [])
+
         required_columns = {"method", "insert_avg_us", "delete_avg_us"}
-        missing = required_columns - set(reader.fieldnames or [])
+        missing = required_columns - fieldnames
         if missing:
             raise ValueError(f"Missing required columns: {sorted(missing)}")
+
+        available_metrics = [metric for metric in METRICS if metric in fieldnames]
 
         for row in reader:
             method = row["method"]
@@ -80,7 +99,7 @@ def main():
             if validation_errors not in ("", "0"):
                 continue
 
-            for metric in METRICS:
+            for metric in available_metrics:
                 grouped[method][metric].append(parse_float(row.get(metric)))
 
     output_rows = []
@@ -89,12 +108,12 @@ def main():
     print(f"Input: {summary_path}")
     print()
     print(
-        f"{'method':<8} {'metric':<16} {'runs':>5} "
+        f"{'method':<8} {'metric':<42} {'runs':>5} "
         f"{'mean':>12} {'median':>12} {'stddev':>12} {'min':>12} {'max':>12}"
     )
 
     for method in sorted(grouped.keys()):
-        for metric in METRICS:
+        for metric in available_metrics:
             stats = summarize(grouped[method][metric])
             if stats is None:
                 continue
@@ -106,11 +125,10 @@ def main():
             })
 
             print(
-                f"{method:<8} {metric:<16} {stats['runs']:>5} "
+                f"{method:<8} {metric:<42} {stats['runs']:>5} "
                 f"{stats['mean']:>12.6f} {stats['median']:>12.6f} "
                 f"{stats['stddev']:>12.6f} {stats['min']:>12.6f} {stats['max']:>12.6f}"
             )
-
     print()
 
     # Print simple STree/DTree speedups if both exist.
@@ -119,7 +137,7 @@ def main():
         for row in output_rows
     }
 
-    for metric in METRICS:
+    for metric in TIMING_METRICS:
         stree = means.get(("stree", metric))
         dtree = means.get(("dtree", metric))
         if stree is not None and dtree is not None:
