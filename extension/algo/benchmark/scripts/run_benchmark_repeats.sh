@@ -45,7 +45,7 @@ mkdir -p "$RESULT_DIR"
 
 SUMMARY_CSV="${RESULT_DIR}/summary.csv"
 
-echo "run,order_in_run,method,trace_file,validate_mode,total_lines,processed_ops,skipped_lines,num_nodes,insert_count,insert_total_seconds,insert_avg_us,delete_count,delete_total_seconds,delete_avg_us,validation_checks,validation_errors,validation_total_seconds,validation_avg_us,exit_code,raw_log" > "$SUMMARY_CSV"
+echo "run,order_in_run,method,trace_file,validate_mode,total_lines,processed_ops,skipped_lines,num_nodes,insert_count,insert_total_seconds,insert_avg_us,delete_count,delete_total_seconds,delete_avg_us,validation_checks,validation_errors,validation_total_seconds,validation_avg_us,delete_total_count,delete_tree_edge_count,delete_non_tree_edge_count,delete_noop_count,tree_delete_ratio,replacement_search_count,replacement_found_count,replacement_not_found_count,avg_replacement_candidates_scanned,max_replacement_candidates_scanned,exit_code,raw_log" > "$SUMMARY_CSV"
 
 extract_value_after_colon() {
   local key="$1"
@@ -64,6 +64,21 @@ extract_section_value() {
       sub(/.*: /, "", $0);
       print $1;
       exit;
+    }
+  ' "$file"
+}
+
+extract_kv_value() {
+  local key="$1"
+  local file="$2"
+  awk -F= -v key="$key" '
+    $1 == key {
+      print $2;
+      found=1;
+      exit;
+    }
+    END {
+      if (!found) print "";
     }
   ' "$file"
 }
@@ -96,25 +111,38 @@ for run in $(seq 1 "$NUM_RUNS"); do
     EXIT_CODE=$?
     set -e
 
-  TOTAL_LINES="$(extract_value_after_colon "Total lines:" "$RAW_LOG" || echo "")"
-  PROCESSED_OPS="$(extract_value_after_colon "Processed operations:" "$RAW_LOG" || echo "")"
-  SKIPPED_LINES="$(extract_value_after_colon "Skipped lines:" "$RAW_LOG" || echo "")"
-  NUM_NODES="$(extract_value_after_colon "Number of nodes created:" "$RAW_LOG" || echo "")"
+    TOTAL_LINES="$(extract_value_after_colon "Total lines:" "$RAW_LOG" || echo "")"
+    PROCESSED_OPS="$(extract_value_after_colon "Processed operations:" "$RAW_LOG" || echo "")"
+    SKIPPED_LINES="$(extract_value_after_colon "Skipped lines:" "$RAW_LOG" || echo "")"
+    NUM_NODES="$(extract_value_after_colon "Number of nodes created:" "$RAW_LOG" || echo "")"
 
-  INSERT_COUNT="$(extract_section_value "Insertions:" "Count:" "$RAW_LOG" || echo "")"
-  INSERT_TOTAL="$(extract_section_value "Insertions:" "Total time:" "$RAW_LOG" || echo "")"
-  INSERT_AVG="$(extract_section_value "Insertions:" "Avg time/op:" "$RAW_LOG" || echo "")"
+    INSERT_COUNT="$(extract_section_value "Insertions:" "Count:" "$RAW_LOG" || echo "")"
+    INSERT_TOTAL="$(extract_section_value "Insertions:" "Total time:" "$RAW_LOG" || echo "")"
+    INSERT_AVG="$(extract_section_value "Insertions:" "Avg time/op:" "$RAW_LOG" || echo "")"
 
-  DELETE_COUNT="$(extract_section_value "Deletions:" "Count:" "$RAW_LOG" || echo "")"
-  DELETE_TOTAL="$(extract_section_value "Deletions:" "Total time:" "$RAW_LOG" || echo "")"
-  DELETE_AVG="$(extract_section_value "Deletions:" "Avg time/op:" "$RAW_LOG" || echo "")"
+    DELETE_COUNT="$(extract_section_value "Deletions:" "Count:" "$RAW_LOG" || echo "")"
+    DELETE_TOTAL="$(extract_section_value "Deletions:" "Total time:" "$RAW_LOG" || echo "")"
+    DELETE_AVG="$(extract_section_value "Deletions:" "Avg time/op:" "$RAW_LOG" || echo "")"
 
-  VALIDATION_CHECKS="$(extract_section_value "Validation:" "Checks:" "$RAW_LOG" || echo "")"
-  VALIDATION_ERRORS="$(extract_section_value "Validation:" "Errors:" "$RAW_LOG" || echo "")"
-  VALIDATION_TOTAL="$(extract_section_value "Validation:" "Total time:" "$RAW_LOG" || echo "")"
-  VALIDATION_AVG="$(extract_section_value "Validation:" "Avg time/check:" "$RAW_LOG" || echo "")"
+    VALIDATION_CHECKS="$(extract_section_value "Validation:" "Checks:" "$RAW_LOG" || echo "")"
+    VALIDATION_ERRORS="$(extract_section_value "Validation:" "Errors:" "$RAW_LOG" || echo "")"
+    VALIDATION_TOTAL="$(extract_section_value "Validation:" "Total time:" "$RAW_LOG" || echo "")"
+    VALIDATION_AVG="$(extract_section_value "Validation:" "Avg time/check:" "$RAW_LOG" || echo "")"
 
-echo "${run},${order_in_run},${method},${TRACE_FILE},${VALIDATE_MODE},${TOTAL_LINES},${PROCESSED_OPS},${SKIPPED_LINES},${NUM_NODES},${INSERT_COUNT},${INSERT_TOTAL},${INSERT_AVG},${DELETE_COUNT},${DELETE_TOTAL},${DELETE_AVG},${VALIDATION_CHECKS},${VALIDATION_ERRORS},${VALIDATION_TOTAL},${VALIDATION_AVG},${EXIT_CODE},${RAW_LOG}" >> "$SUMMARY_CSV"
+    DELETE_TOTAL_COUNT="$(extract_kv_value "delete_total_count" "$RAW_LOG" || echo "")"
+    DELETE_TREE_EDGE_COUNT="$(extract_kv_value "delete_tree_edge_count" "$RAW_LOG" || echo "")"
+    DELETE_NON_TREE_EDGE_COUNT="$(extract_kv_value "delete_non_tree_edge_count" "$RAW_LOG" || echo "")"
+    DELETE_NOOP_COUNT="$(extract_kv_value "delete_noop_count" "$RAW_LOG" || echo "")"
+    TREE_DELETE_RATIO="$(extract_kv_value "tree_delete_ratio" "$RAW_LOG" || echo "")"
+
+    REPLACEMENT_SEARCH_COUNT="$(extract_kv_value "replacement_search_count" "$RAW_LOG" || echo "")"
+    REPLACEMENT_FOUND_COUNT="$(extract_kv_value "replacement_found_count" "$RAW_LOG" || echo "")"
+    REPLACEMENT_NOT_FOUND_COUNT="$(extract_kv_value "replacement_not_found_count" "$RAW_LOG" || echo "")"
+
+    AVG_REPLACEMENT_CANDIDATES_SCANNED="$(extract_kv_value "avg_replacement_candidates_scanned" "$RAW_LOG" || echo "")"
+    MAX_REPLACEMENT_CANDIDATES_SCANNED="$(extract_kv_value "max_replacement_candidates_scanned" "$RAW_LOG" || echo "")"
+
+    echo "${run},${order_in_run},${method},${TRACE_FILE},${VALIDATE_MODE},${TOTAL_LINES},${PROCESSED_OPS},${SKIPPED_LINES},${NUM_NODES},${INSERT_COUNT},${INSERT_TOTAL},${INSERT_AVG},${DELETE_COUNT},${DELETE_TOTAL},${DELETE_AVG},${VALIDATION_CHECKS},${VALIDATION_ERRORS},${VALIDATION_TOTAL},${VALIDATION_AVG},${DELETE_TOTAL_COUNT},${DELETE_TREE_EDGE_COUNT},${DELETE_NON_TREE_EDGE_COUNT},${DELETE_NOOP_COUNT},${TREE_DELETE_RATIO},${REPLACEMENT_SEARCH_COUNT},${REPLACEMENT_FOUND_COUNT},${REPLACEMENT_NOT_FOUND_COUNT},${AVG_REPLACEMENT_CANDIDATES_SCANNED},${MAX_REPLACEMENT_CANDIDATES_SCANNED},${EXIT_CODE},${RAW_LOG}" >> "$SUMMARY_CSV"
 
     if [ "$EXIT_CODE" -ne 0 ]; then
       echo "  Warning: ${method} run ${run} exited with code ${EXIT_CODE}. See ${RAW_LOG}"
