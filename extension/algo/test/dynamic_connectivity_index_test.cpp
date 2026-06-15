@@ -141,3 +141,56 @@ TEST(DynamicConnectivityIndexFactoryTest, ThrowsOnUnknownMethodName) {
     EXPECT_THROW(createDynamicConnectivityIndex("unknown"), std::runtime_error);
 }
 
+TEST(DynamicConnectivityIndexTest, STreeIndexDeleteDiagnostics) {
+    STreeIndex index;
+
+    EXPECT_TRUE(index.supportsDeleteDiagnostics());
+
+    // Deleting a missing edge should be reported as a no-op deletion.
+    index.deleteEdge(100, 200);
+    {
+        auto diag = index.lastDeleteDiagnostics();
+        EXPECT_EQ(diag.edgeKind, DeleteDiagnostics::EdgeKind::NONE);
+        EXPECT_FALSE(diag.replacementSearchTriggered);
+        EXPECT_FALSE(diag.replacementFound);
+        EXPECT_EQ(diag.replacementCandidatesScanned, 0u);
+    }
+
+    // Deleting a tree edge with no replacement available.
+    index.insertEdge(1, 2);
+    index.deleteEdge(1, 2);
+    {
+        auto diag = index.lastDeleteDiagnostics();
+        EXPECT_EQ(diag.edgeKind, DeleteDiagnostics::EdgeKind::TREE);
+        EXPECT_TRUE(diag.replacementSearchTriggered);
+        EXPECT_FALSE(diag.replacementFound);
+        EXPECT_EQ(diag.replacementCandidatesScanned, 0u);
+        EXPECT_FALSE(index.connected(1, 2));
+    }
+
+    // Deleting a non-tree edge should not trigger replacement search.
+    index.insertEdge(1, 2);
+    index.insertEdge(2, 3);
+    index.insertEdge(1, 3);
+    index.deleteEdge(1, 3);
+    {
+        auto diag = index.lastDeleteDiagnostics();
+        EXPECT_EQ(diag.edgeKind, DeleteDiagnostics::EdgeKind::NON_TREE);
+        EXPECT_FALSE(diag.replacementSearchTriggered);
+        EXPECT_FALSE(diag.replacementFound);
+        EXPECT_EQ(diag.replacementCandidatesScanned, 0u);
+    }
+
+    // Re-add the non-tree edge, then delete a tree edge so replacement search
+    // reconnects the component through the non-tree edge.
+    index.insertEdge(1, 3);
+    index.deleteEdge(2, 3);
+    {
+        auto diag = index.lastDeleteDiagnostics();
+        EXPECT_EQ(diag.edgeKind, DeleteDiagnostics::EdgeKind::TREE);
+        EXPECT_TRUE(diag.replacementSearchTriggered);
+        EXPECT_TRUE(diag.replacementFound);
+        EXPECT_GE(diag.replacementCandidatesScanned, 1u);
+        EXPECT_TRUE(index.connected(2, 3));
+    }
+}
