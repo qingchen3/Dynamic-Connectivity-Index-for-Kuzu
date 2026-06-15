@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common/delete_diagnostics.h"
+
 #include <cstdint>
 #include <set>
 #include <tuple>
@@ -24,15 +26,15 @@ struct DNode {
 };
 
 void insert_edge(int u, int v, std::unordered_map<int, DNode*>& Dtree);
-void delete_edge(int u, int v, std::unordered_map<int, DNode*>& Dtree);
+void delete_edge(int u, int v, std::unordered_map<int, DNode*>& Dtree, DeleteDiagnostics& diag);
 
 std::pair<DNode*, DNode*> unlink(DNode* n_v);
 std::pair<DNode*, int> find_root(DNode* node);
 void insert_nte(DNode* r, DNode* n_u, int dist_u, DNode* n_v, int dist_v);
 DNode* insert_te(DNode* n_u, DNode* n_v, DNode* r_u, DNode* r_v);
 void delete_nte(DNode* n_u, DNode* n_v);
-std::pair<DNode*, DNode*> delete_te(DNode* n_u, DNode* n_v);
-std::tuple<DNode*, DNode*, DNode*> BFS_select(DNode* r);
+std::pair<DNode*, DNode*> delete_te(DNode* n_u, DNode* n_v, DeleteDiagnostics& diag);
+std::tuple<DNode*, DNode*, DNode*> BFS_select(DNode* r, DeleteDiagnostics& diag);
 void cal_size(std::unordered_map<int, DNode*>& Dtree);
 
 int query(DNode* n_u, DNode* n_v);
@@ -57,11 +59,15 @@ public:
     bool containsNode(node_key_t key) const;
     uint64_t getNumNodes() const;
 
+    // Diagnostics describing the most recent deleteEdge() call.
+    const DeleteDiagnostics& lastDeleteDiagnostics() const { return lastDeleteDiagnostics_; }
+
 private:
     static int toInternalKey(node_key_t key);
 
 private:
     std::unordered_map<int, dtree_internal::DNode*> nodes;
+    DeleteDiagnostics lastDeleteDiagnostics_;
 };
 
 } // namespace algo_extension
