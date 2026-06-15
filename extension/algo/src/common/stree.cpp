@@ -133,12 +133,15 @@ STree::SNode* STree::reroot(SNode* node) {
 }
 
 void STree::deleteEdge(node_key_t u, node_key_t v) {
+    lastDeleteDiagnostics_ = DeleteDiagnostics{};
+
     auto uNode = getNode(u);
     auto vNode = getNode(v);
     if (uNode == nullptr || vNode == nullptr) {
         return;
     }
     if (uNode->nte.contains(vNode)) {
+        lastDeleteDiagnostics_.edgeKind = DeleteDiagnostics::EdgeKind::NON_TREE;
         deleteNonTreeEdge(u, v);
         return;
     }
@@ -167,6 +170,9 @@ void STree::deleteTreeEdge(node_key_t parent, node_key_t child) {
     if (parentNode == nullptr || childNode == nullptr || childNode->parent != parentNode) {
         return;
     }
+    // A valid tree edge is being removed, which triggers replacement search.
+    lastDeleteDiagnostics_.edgeKind = DeleteDiagnostics::EdgeKind::TREE;
+    lastDeleteDiagnostics_.replacementSearchTriggered = true;
 
     parentNode->children.erase(childNode);
     if (parentNode->children.size() == 1) {
@@ -196,15 +202,17 @@ void STree::deleteTreeEdge(node_key_t parent, node_key_t child) {
         grandChild->skip = nullptr;
     }
 
-    auto [connectedNode, nteNeighbor] = searchReplacement(childNode);
+    auto [connectedNode, nteNeighbor] = searchReplacement(childNode, lastDeleteDiagnostics_);
     if (nteNeighbor != nullptr) {
+        lastDeleteDiagnostics_.replacementFound = true;
         connectedNode->nte.erase(nteNeighbor);
         nteNeighbor->nte.erase(connectedNode);
         insertTreeEdge(connectedNode->key, nteNeighbor->key);
     }
 }
 
-std::pair<STree::SNode*, STree::SNode*> STree::searchReplacement(SNode* startNode) {
+std::pair<STree::SNode*, STree::SNode*> STree::searchReplacement(
+    SNode* startNode, DeleteDiagnostics& diag) {
     if (startNode == nullptr) {
         return {nullptr, nullptr};
     }
@@ -215,6 +223,7 @@ std::pair<STree::SNode*, STree::SNode*> STree::searchReplacement(SNode* startNod
         auto current = q.front();
         q.pop();
         for (auto nteNeighbor : current->nte) {
+            diag.replacementCandidatesScanned++;
             if (findRoot(nteNeighbor) != startNode) {
                 return {current, nteNeighbor};
             }

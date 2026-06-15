@@ -35,6 +35,14 @@ public:
         return "dtree";
     }
 
+    bool supportsDeleteDiagnostics() const override {
+        return true;
+    }
+
+    DeleteDiagnostics lastDeleteDiagnostics() const override {
+        return dtree.lastDeleteDiagnostics();
+    }
+
 private:
     DTree dtree;
 };

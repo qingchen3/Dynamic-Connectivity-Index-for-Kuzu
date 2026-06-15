@@ -35,6 +35,14 @@ public:
         return "stree";
     }
 
+    bool supportsDeleteDiagnostics() const override {
+        return true;
+    }
+
+    DeleteDiagnostics lastDeleteDiagnostics() const override {
+        return stree.lastDeleteDiagnostics();
+    }
+
 private:
     STree stree;
 };

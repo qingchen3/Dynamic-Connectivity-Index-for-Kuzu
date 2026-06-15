@@ -1,5 +1,7 @@
 #include "common/dynamic_connectivity_index_factory.h"
+#include "common/delete_diagnostics.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cctype>
 #include <cstdint>
@@ -92,6 +94,65 @@ ValidateMode parseValidateMode(const std::string& arg) {
     throw std::runtime_error("Unknown validation option: " + arg);
 }
 
+struct DeleteDiagnosticsSummary {
+    uint64_t deleteTotalCount = 0;
+    uint64_t deleteTreeEdgeCount = 0;
+    uint64_t deleteNonTreeEdgeCount = 0;
+    uint64_t deleteNoopCount = 0;
+
+    uint64_t replacementSearchCount = 0;
+    uint64_t replacementFoundCount = 0;
+    uint64_t replacementNotFoundCount = 0;
+
+    uint64_t replacementCandidatesScannedTotal = 0;
+    uint64_t replacementCandidatesScannedMax = 0;
+
+    void record(const DeleteDiagnostics& diag) {
+        deleteTotalCount++;
+
+        switch (diag.edgeKind) {
+        case DeleteDiagnostics::EdgeKind::TREE:
+            deleteTreeEdgeCount++;
+            break;
+        case DeleteDiagnostics::EdgeKind::NON_TREE:
+            deleteNonTreeEdgeCount++;
+            break;
+        case DeleteDiagnostics::EdgeKind::NONE:
+            deleteNoopCount++;
+            break;
+        }
+
+        if (diag.replacementSearchTriggered) {
+            replacementSearchCount++;
+            if (diag.replacementFound) {
+                replacementFoundCount++;
+            } else {
+                replacementNotFoundCount++;
+            }
+        }
+
+        replacementCandidatesScannedTotal += diag.replacementCandidatesScanned;
+        replacementCandidatesScannedMax =
+            std::max(replacementCandidatesScannedMax, diag.replacementCandidatesScanned);
+    }
+
+    double treeDeleteRatio() const {
+        const auto realDeletes = deleteTreeEdgeCount + deleteNonTreeEdgeCount;
+        if (realDeletes == 0) {
+            return 0.0;
+        }
+        return static_cast<double>(deleteTreeEdgeCount) / static_cast<double>(realDeletes);
+    }
+
+    double avgReplacementCandidatesScanned() const {
+        if (replacementSearchCount == 0) {
+            return 0.0;
+        }
+        return static_cast<double>(replacementCandidatesScannedTotal) /
+               static_cast<double>(replacementSearchCount);
+    }
+};
+
 void printUsage(const char* programName) {
     std::cerr << "Usage:\n"
               << "  " << programName << " <stree|dtree> <trace_file> [--validate=expected|--validate=none]\n\n"
@@ -151,6 +212,8 @@ int main(int argc, char** argv) {
     double deleteMicros = 0.0;
     double validationMicros = 0.0;
 
+    DeleteDiagnosticsSummary deleteDiagSummary;
+
     std::string line;
     while (std::getline(input, line)) {
         totalLines++;
@@ -182,6 +245,10 @@ int main(int argc, char** argv) {
             auto start = std::chrono::steady_clock::now();
             index->deleteEdge(op.u, op.v);
             auto end = std::chrono::steady_clock::now();
+
+            if (index->supportsDeleteDiagnostics()) {
+                deleteDiagSummary.record(index->lastDeleteDiagnostics());
+            }
 
             deleteMicros += std::chrono::duration<double, std::micro>(end - start).count();
             deleteCount++;
@@ -237,6 +304,24 @@ int main(int argc, char** argv) {
     std::cout << "  Total time: " << deleteMicros / 1000000.0 << " seconds\n";
     if (deleteCount > 0) {
         std::cout << "  Avg time/op: " << deleteMicros / deleteCount << " us\n";
+    }
+
+    if (index->supportsDeleteDiagnostics()) {
+        std::cout << "\nDeleteDiagnostics:\n";
+        std::cout << "delete_total_count=" << deleteDiagSummary.deleteTotalCount << "\n";
+        std::cout << "delete_tree_edge_count=" << deleteDiagSummary.deleteTreeEdgeCount << "\n";
+        std::cout << "delete_non_tree_edge_count=" << deleteDiagSummary.deleteNonTreeEdgeCount << "\n";
+        std::cout << "delete_noop_count=" << deleteDiagSummary.deleteNoopCount << "\n";
+        std::cout << "tree_delete_ratio=" << deleteDiagSummary.treeDeleteRatio() << "\n";
+
+        std::cout << "replacement_search_count=" << deleteDiagSummary.replacementSearchCount << "\n";
+        std::cout << "replacement_found_count=" << deleteDiagSummary.replacementFoundCount << "\n";
+        std::cout << "replacement_not_found_count=" << deleteDiagSummary.replacementNotFoundCount << "\n";
+
+        std::cout << "avg_replacement_candidates_scanned="
+                << deleteDiagSummary.avgReplacementCandidatesScanned() << "\n";
+        std::cout << "max_replacement_candidates_scanned="
+                << deleteDiagSummary.replacementCandidatesScannedMax << "\n";
     }
 
     std::cout << "\nValidation:\n";
