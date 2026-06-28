@@ -41,6 +41,12 @@ struct WeaklyConnectedComponentsAliasFunction {
     static constexpr const char* name = "WCC";
 };
 
+struct DynamicConnectivityQueryFunction {
+    static constexpr const char * name = "Dynamic_Connectivity_Query";
+
+    static function::function_set getFunctionSet();
+};
+
 struct PageRankFunction {
     static constexpr const char* name = "PAGE_RANK";
 
