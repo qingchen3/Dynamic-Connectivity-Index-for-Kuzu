@@ -6,6 +6,7 @@ add_library(kuzu_algo_function
         strongly_connected_components.cpp
         strongly_connected_components_kosaraju.cpp
         weakly_connected_components.cpp
+        create_dynamic_connectivity_index.cpp
         dynamic_connectivity_query.cpp
         page_rank.cpp
         k_core_decomposition.cpp

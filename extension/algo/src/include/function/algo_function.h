@@ -5,6 +5,12 @@
 namespace kuzu {
 namespace algo_extension {
 
+struct CreateDynamicConnectivityIndexFunction {
+    static constexpr const char* name = "CREATE_DYNAMIC_CONNECTIVITY_INDEX";
+
+    static function::function_set getFunctionSet();
+};
+
 struct SCCFunction {
     static constexpr const char* name = "STRONGLY_CONNECTED_COMPONENTS";
 

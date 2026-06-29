@@ -6,6 +6,14 @@
 #include "function/table/table_function.h"
 #include "main/client_context.h"
 
+#include "catalog/catalog.h"
+#include "common/exception/binder.h"
+#include "index/native_dynamic_connectivity_index.h"
+#include "processor/execution_context.h"
+#include "storage/storage_manager.h"
+#include "storage/table/node_table.h"
+#include "transaction/transaction.h"
+
 #include <fstream>
 
 
@@ -27,20 +35,21 @@ void traceWithThread(const std::string& msg) {
 }
 
 struct DynamicConnectivityQueryBindData final : TableFuncBindData {
-    std::string graphName;
+    table_id_t nodeTableID;
     int64_t src;
     int64_t dst;
-    std::string method;
+    std::string indexName;
 
-    DynamicConnectivityQueryBindData(std::string graphName, int64_t src, int64_t dst,
-        std::string method, binder::expression_vector columns, offset_t numRows)
+    DynamicConnectivityQueryBindData(table_id_t nodeTableID, int64_t src,
+        int64_t dst, std::string indexName,
+        binder::expression_vector columns, offset_t numRows)
         : TableFuncBindData{std::move(columns), numRows},
-          graphName{std::move(graphName)}, src{src}, dst{dst},
-          method{std::move(method)} {}
+          nodeTableID{nodeTableID}, src{src}, dst{dst},
+          indexName{std::move(indexName)} {}
 
     std::unique_ptr<TableFuncBindData> copy() const override {
         return std::make_unique<DynamicConnectivityQueryBindData>(
-            graphName, src, dst, method, columns, numRows);
+            nodeTableID, src, dst, indexName, columns, numRows);
     }
 };
 
@@ -66,42 +75,76 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
     }
 
     const auto bindData = input.bindData->constPtrCast<DynamicConnectivityQueryBindData>();
-    //(void)bindData;
 
-    traceWithThread("graph=" + bindData->graphName +
-        ", src=" + std::to_string(bindData->src) +
-        ", dst=" + std::to_string(bindData->dst) +
-        ", method=" + bindData->method);
+    auto nodeTable =
+        storage::StorageManager::Get(*input.context->clientContext)
+            ->getTable(bindData->nodeTableID)
+            ->ptrCast<storage::NodeTable>();
+
+    auto indexOpt = nodeTable->getIndex(bindData->indexName);
+    KU_ASSERT(indexOpt.has_value());
+
+    auto& index =
+        indexOpt.value()->cast<NativeDynamicConnectivityIndex>();
+
+    std::stringstream ss;
+    ss << "index=" << static_cast<const void*>(&index)
+    << ", src=" << bindData->src
+    << ", dst=" << bindData->dst
+    << ", method=" << index.getMethod();
+    traceWithThread(ss.str());
 
     traceWithThread("4c. tableFunc: Won the race, emitting 1 row");
 
+    const auto isConnected =
+        index.connected(bindData->src, bindData->dst);
+
     auto& outputVector = output.dataChunk.getValueVectorMutable(0);
     auto pos = output.dataChunk.state->getSelVector()[0];
-    outputVector.setValue(pos, true);
+    outputVector.setValue(pos, isConnected);
     return 1;
 }
 
-static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext*,
-    const TableFuncBindInput* input) {
+static std::unique_ptr<TableFuncBindData> bindFunc(
+    main::ClientContext* context, const TableFuncBindInput* input) {
     traceDyn("2. bindFunc called");
-    auto graphName = input->getLiteralVal<std::string>(0);
+
+    auto tableName = input->getLiteralVal<std::string>(0);
     auto src = input->getLiteralVal<int64_t>(1);
     auto dst = input->getLiteralVal<int64_t>(2);
-    auto method = input->getLiteralVal<std::string>(3);
+    auto indexName = input->getLiteralVal<std::string>(3);
 
-    std::vector<std::string> returnColumnNames;
-    std::vector<LogicalType> returnTypes;
+    binder::Binder::validateTableExistence(*context, tableName);
+    auto transaction = transaction::Transaction::Get(*context);
+    auto tableEntry = catalog::Catalog::Get(*context)
+                          ->getTableCatalogEntry(transaction, tableName);
+    binder::Binder::validateNodeTableType(tableEntry);
 
-    returnColumnNames.emplace_back("connected");
-    returnTypes.emplace_back(LogicalType::BOOL());
+    auto nodeTableID = tableEntry->getTableID();
+    auto nodeTable = storage::StorageManager::Get(*context)
+                         ->getTable(nodeTableID)
+                         ->ptrCast<storage::NodeTable>();
 
-    returnColumnNames =
-        TableFunction::extractYieldVariables(returnColumnNames, input->yieldVariables);
-    auto columns = input->binder->createVariables(returnColumnNames, returnTypes);
+    auto indexOpt = nodeTable->getIndex(indexName);
+    if (!indexOpt.has_value()) {
+        throw BinderException{"Index " + indexName +
+                              " does not exist in table " + tableName + "."};
+    }
 
-    //return std::make_unique<TableFuncBindData>(std::move(columns), 1 /* one row result */);
+    // Validate that the named index has the expected runtime type.
+    (void)indexOpt.value()->cast<NativeDynamicConnectivityIndex>();
+
+    std::vector<std::string> names;
+    std::vector<LogicalType> types;
+    names.emplace_back("connected");
+    types.emplace_back(LogicalType::BOOL());
+
+    names = TableFunction::extractYieldVariables(
+        names, input->yieldVariables);
+    auto columns = input->binder->createVariables(names, types);
+
     return std::make_unique<DynamicConnectivityQueryBindData>(
-        std::move(graphName), src, dst, std::move(method),
+        nodeTableID, src, dst, std::move(indexName),
         std::move(columns), 1);
 }
 
