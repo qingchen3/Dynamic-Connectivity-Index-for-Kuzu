@@ -7,6 +7,8 @@
 #include "function/table/bind_data.h"
 #include "function/table/bind_input.h"
 #include "function/table/table_function.h"
+#include "graph/on_disk_graph.h"
+#include "function/table/table_function.h"
 #include "index/native_dynamic_connectivity_index.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
@@ -23,20 +25,21 @@ namespace algo_extension {
 
 struct CreateDynamicConnectivityIndexBindData final : TableFuncBindData {
     table_id_t nodeTableID;
+    table_id_t relGroupID;
     table_id_t relTableID;
     std::string indexName;
     std::string method;
 
     CreateDynamicConnectivityIndexBindData(table_id_t nodeTableID,
-        table_id_t relTableID, std::string indexName, std::string method,
-        binder::expression_vector columns)
+        table_id_t relGroupID, table_id_t relTableID, std::string indexName, 
+        std::string method, binder::expression_vector columns)
         : TableFuncBindData{std::move(columns), 1}, nodeTableID{nodeTableID},
-          relTableID{relTableID}, indexName{std::move(indexName)},
-          method{std::move(method)} {}
+          relGroupID{relGroupID}, relTableID{relTableID}, 
+          indexName{std::move(indexName)}, method{std::move(method)} {}
 
     std::unique_ptr<TableFuncBindData> copy() const override {
         return std::make_unique<CreateDynamicConnectivityIndexBindData>(
-            nodeTableID, relTableID, indexName, method, columns);
+            nodeTableID, relGroupID, relTableID, indexName, method, columns);
     }
 };
 
@@ -77,6 +80,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(
     }
 
     auto nodeTableID = nodeEntry->getTableID();
+    auto relGroupID = relEntry->getTableID();
     auto relTableID = relGroupEntry->getSingleRelEntryInfo().oid;
 
     auto nodeTable =
@@ -98,14 +102,47 @@ static std::unique_ptr<TableFuncBindData> bindFunc(
     auto columns = input->binder->createVariables(names, types);
 
     return std::make_unique<CreateDynamicConnectivityIndexBindData>(
-        nodeTableID, relTableID, std::move(indexName), std::move(method),
-        std::move(columns));
+        nodeTableID, relGroupID, relTableID, std::move(indexName), 
+        std::move(method), std::move(columns));
 }
 
 static std::unique_ptr<TableFuncSharedState> initSharedState(
     const TableFuncInitSharedStateInput&) {
     return std::make_unique<
         CreateDynamicConnectivityIndexSharedState>();
+}
+
+static offset_t buildIndexFromExistingRels(main::ClientContext* context,
+    table_id_t nodeTableID, table_id_t relGroupID, table_id_t relTableID,
+    NativeDynamicConnectivityIndex& index) {
+    auto transaction = transaction::Transaction::Get(*context);
+    auto catalog = catalog::Catalog::Get(*context);
+
+    auto nodeEntry = catalog->getTableCatalogEntry(transaction, nodeTableID);
+    auto relEntry = catalog->getTableCatalogEntry(transaction, relGroupID);
+
+    graph::NativeGraphEntry graphEntry{
+        std::vector<catalog::TableCatalogEntry*>{nodeEntry},
+        std::vector<catalog::TableCatalogEntry*>{relEntry}};
+    graph::OnDiskGraph graph{context, std::move(graphEntry)};
+
+    auto maxOffset = graph.getMaxOffset(transaction, nodeTableID);
+    auto scanState = graph.prepareRelScan(
+        *relEntry, relTableID, nodeTableID, {}, true /* randomLookup */);
+
+    offset_t numInsertedEdges = 0;
+    for (offset_t srcOffset = 0; srcOffset < maxOffset; srcOffset++) {
+        nodeID_t srcNodeID{srcOffset, nodeTableID};
+
+        for (auto chunk : graph.scanFwd(srcNodeID, *scanState)) {
+            chunk.forEach([&](auto neighbors, auto, auto i) {
+                auto dstNodeID = neighbors[i];
+                index.insertEdge(srcOffset, dstNodeID.offset);
+                numInsertedEdges++;
+            });
+        }
+    }
+    return numInsertedEdges;
 }
 
 static offset_t tableFunc(
@@ -136,6 +173,13 @@ static offset_t tableFunc(
         bindData->relTableID,
         bindData->method);
 
+    auto numBuiltEdges = buildIndexFromExistingRels (
+        input.context->clientContext,
+        bindData->nodeTableID,
+        bindData->relGroupID,
+        bindData->relTableID,
+        *index);
+    
     auto nodeTable =
         storage::StorageManager::Get(*input.context->clientContext)
             ->getTable(bindData->nodeTableID)
@@ -146,8 +190,9 @@ static offset_t tableFunc(
     auto& outputVector = output.dataChunk.getValueVectorMutable(0);
     auto pos = output.dataChunk.state->getSelVector()[0];
     outputVector.setValue(
-        pos, "Dynamic connectivity index " + bindData->indexName +
-                 " has been created.");
+    pos, "Dynamic connectivity index " + bindData->indexName +
+             " has been created with " + std::to_string(numBuiltEdges) +
+             " edges.");
     return 1;
 }
 
