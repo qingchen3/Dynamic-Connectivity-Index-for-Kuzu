@@ -53,6 +53,12 @@ struct DynamicConnectivityQueryFunction {
     static function::function_set getFunctionSet();
 };
 
+struct DynamicConnectivityInsertEdgeFunction {
+    static constexpr const char* name = "DYNAMIC_CONNECTIVITY_INSERT_EDGE";
+
+    static function::function_set getFunctionSet();
+};
+
 struct PageRankFunction {
     static constexpr const char* name = "PAGE_RANK";
 
