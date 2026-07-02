@@ -11,6 +11,18 @@ struct CreateDynamicConnectivityIndexFunction {
     static function::function_set getFunctionSet();
 };
 
+struct DynamicConnectivityQueryFunction {
+    static constexpr const char* name = "Dynamic_Connectivity_Query";
+
+    static function::function_set getFunctionSet();
+};
+
+struct DynamicConnectivityInsertEdgeFunction {
+    static constexpr const char* name = "DYNAMIC_CONNECTIVITY_INSERT_EDGE";
+
+    static function::function_set getFunctionSet();
+};
+
 struct SCCFunction {
     static constexpr const char* name = "STRONGLY_CONNECTED_COMPONENTS";
 
@@ -45,18 +57,6 @@ struct WeaklyConnectedComponentsAliasFunction {
     using alias = WeaklyConnectedComponentsFunction;
 
     static constexpr const char* name = "WCC";
-};
-
-struct DynamicConnectivityQueryFunction {
-    static constexpr const char * name = "Dynamic_Connectivity_Query";
-
-    static function::function_set getFunctionSet();
-};
-
-struct DynamicConnectivityInsertEdgeFunction {
-    static constexpr const char* name = "DYNAMIC_CONNECTIVITY_INSERT_EDGE";
-
-    static function::function_set getFunctionSet();
 };
 
 struct PageRankFunction {
