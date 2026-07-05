@@ -3,8 +3,11 @@
 #include "binder/binder.h"
 #include "catalog/catalog.h"
 #include "common/exception/binder.h"
+#include "common/exception/runtime.h"
+#include "common/string_format.h"
 #include "function/table/bind_data.h"
 #include "function/table/bind_input.h"
+#include "function/table/simple_table_function.h"
 #include "function/table/table_function.h"
 #include "index/native_dynamic_connectivity_index.h"
 #include "main/client_context.h"
@@ -13,33 +16,26 @@
 #include "storage/table/node_table.h"
 #include "transaction/transaction.h"
 
-#include <atomic>
-
 using namespace kuzu::common;
 using namespace kuzu::function;
 
 namespace kuzu {
 namespace algo_extension {
 
-struct DynamicConnectivityInsertEdgeBindData final : TableFuncBindData {
+struct DynamicConnectivityDeleteEdgeBindData final : TableFuncBindData {
     table_id_t nodeTableID;
     std::string indexName;
     int64_t src;
     int64_t dst;
 
-    DynamicConnectivityInsertEdgeBindData(table_id_t nodeTableID, std::string indexName,
+    DynamicConnectivityDeleteEdgeBindData(table_id_t nodeTableID, std::string indexName,
         int64_t src, int64_t dst, binder::expression_vector columns)
         : TableFuncBindData{std::move(columns), 1}, nodeTableID{nodeTableID},
           indexName{std::move(indexName)}, src{src}, dst{dst} {}
 
     std::unique_ptr<TableFuncBindData> copy() const override {
-        return std::make_unique<DynamicConnectivityInsertEdgeBindData>(
-            nodeTableID, indexName, src, dst, columns);
+        return std::make_unique<DynamicConnectivityDeleteEdgeBindData>(*this);
     }
-};
-
-struct DynamicConnectivityInsertEdgeSharedState final : TableFuncSharedState {
-    std::atomic_bool inserted{false};
 };
 
 static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
@@ -54,6 +50,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
     auto transaction = transaction::Transaction::Get(*context);
     auto catalog = catalog::Catalog::Get(*context);
     auto tableEntry = catalog->getTableCatalogEntry(transaction, tableName);
+
     binder::Binder::validateNodeTableType(tableEntry);
 
     auto nodeTableID = tableEntry->getTableID();
@@ -63,10 +60,13 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
 
     auto indexOpt = nodeTable->getIndex(indexName);
     if (!indexOpt.has_value()) {
-        throw BinderException{"Index " + indexName + " does not exist."};
+        throw BinderException(stringFormat("Index {} does not exist.", indexName));
     }
-
-    (void) indexOpt.value()->cast<NativeDynamicConnectivityIndex>();
+    auto index = indexOpt.value();
+    if (index->getIndexInfo().indexType != NativeDynamicConnectivityIndex::TYPE_NAME) {
+        throw BinderException(
+            stringFormat("Index {} is not a dynamic connectivity index.", indexName));
+    }
 
     std::vector<std::string> names;
     std::vector<LogicalType> types;
@@ -77,50 +77,42 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
     names = TableFunction::extractYieldVariables(names, input->yieldVariables);
     auto columns = input->binder->createVariables(names, types);
 
-    return std::make_unique<DynamicConnectivityInsertEdgeBindData>(
-        nodeTableID, std::move(indexName), src, dst, std::move(columns));
-}
-
-static std::unique_ptr<TableFuncSharedState> initSharedState(
-    const TableFuncInitSharedStateInput&) {
-    return std::make_unique<DynamicConnectivityInsertEdgeSharedState>();
+    return std::make_unique<DynamicConnectivityDeleteEdgeBindData>(nodeTableID,
+        std::move(indexName), src, dst, std::move(columns));
 }
 
 static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) {
-    auto sharedState =
-        input.sharedState->ptrCast<DynamicConnectivityInsertEdgeSharedState>();
-
-    bool expected = false;
-    if (!sharedState->inserted.compare_exchange_strong(expected, true)) {
+    auto sharedState = input.sharedState->ptrCast<SimpleTableFuncSharedState>();
+    auto morsel = sharedState->getMorsel();
+    if (!morsel.hasMoreToOutput()) {
         return 0;
     }
-
-    auto bindData =
-        input.bindData->constPtrCast<DynamicConnectivityInsertEdgeBindData>();
-
-    auto nodeTable = storage::StorageManager::Get(*input.context->clientContext)
+    auto bindData = input.bindData->constPtrCast<DynamicConnectivityDeleteEdgeBindData>();
+    auto clientContext = input.context->clientContext;
+    auto nodeTable = storage::StorageManager::Get(*clientContext)
                          ->getTable(bindData->nodeTableID)
                          ->ptrCast<storage::NodeTable>();
-
     auto indexOpt = nodeTable->getIndex(bindData->indexName);
     if (!indexOpt.has_value()) {
-        throw RuntimeException{"Index " + bindData->indexName + " does not exist."};
+        throw RuntimeException(stringFormat("Index {} does not exist.", bindData->indexName));
     }
-
-    auto& index = indexOpt.value()->cast<NativeDynamicConnectivityIndex>();
-    index.insertEdge(bindData->src, bindData->dst);
-
+    auto index = indexOpt.value();
+    if (index->getIndexInfo().indexType != NativeDynamicConnectivityIndex::TYPE_NAME) {
+        throw RuntimeException(
+            stringFormat("Index {} is not a dynamic connectivity index.", bindData->indexName));
+    }
+    auto& dcIndex = index->cast<NativeDynamicConnectivityIndex>();
+    dcIndex.deleteEdge(bindData->src, bindData->dst);
     auto& outputVector = output.dataChunk.getValueVectorMutable(0);
     auto pos = output.dataChunk.state->getSelVector()[0];
-    outputVector.setValue(pos,
-        "Inserted edge (" + std::to_string(bindData->src) + ", " +
-            std::to_string(bindData->dst) + ") into dynamic connectivity index " +
-            bindData->indexName + ".");
+    outputVector.setValue(pos, stringFormat("Deleted edge ({}, {}) from index {}.", bindData->src,
+                                   bindData->dst, bindData->indexName));
     return 1;
 }
 
-function_set DynamicConnectivityInsertEdgeFunction::getFunctionSet() {
+function_set DynamicConnectivityDeleteEdgeFunction::getFunctionSet() {
     function_set result;
+
     std::vector inputTypes{
         LogicalTypeID::STRING,
         LogicalTypeID::STRING,
@@ -129,9 +121,11 @@ function_set DynamicConnectivityInsertEdgeFunction::getFunctionSet() {
 
     auto function = std::make_unique<TableFunction>(name, inputTypes);
     function->bindFunc = bindFunc;
-    function->initSharedStateFunc = initSharedState;
-    function->initLocalStateFunc = TableFunction::initEmptyLocalState;
     function->tableFunc = tableFunc;
+    function->initSharedStateFunc = SimpleTableFunc::initSharedState;
+    function->initLocalStateFunc = TableFunction::initEmptyLocalState;
+    function->canParallelFunc = [] { return false; };
+    function->isReadOnly = false;
     result.push_back(std::move(function));
     return result;
 }

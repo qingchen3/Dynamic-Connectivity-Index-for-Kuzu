@@ -30,7 +30,9 @@ public:
     void insertEdge(node_key_t src, node_key_t dst);
     void deleteEdge(node_key_t src, node_key_t dst);
     bool connected(node_key_t src, node_key_t dst) const;
-
+    
+    static constexpr const char* TYPE_NAME = "DYNAMIC_CONNECTIVITY";
+    
     common::table_id_t getSourceRelTableID() const {
         return sourceRelTableID;
     }

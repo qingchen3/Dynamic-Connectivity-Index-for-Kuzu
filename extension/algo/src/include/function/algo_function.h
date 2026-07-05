@@ -23,6 +23,12 @@ struct DynamicConnectivityInsertEdgeFunction {
     static function::function_set getFunctionSet();
 };
 
+struct DynamicConnectivityDeleteEdgeFunction {
+    static constexpr const char* name = "DYNAMIC_CONNECTIVITY_DELETE_EDGE";
+
+    static function::function_set getFunctionSet();
+};
+
 struct SCCFunction {
     static constexpr const char* name = "STRONGLY_CONNECTED_COMPONENTS";
 

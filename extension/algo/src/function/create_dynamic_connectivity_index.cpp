@@ -8,7 +8,6 @@
 #include "function/table/bind_input.h"
 #include "function/table/table_function.h"
 #include "graph/on_disk_graph.h"
-#include "function/table/table_function.h"
 #include "index/native_dynamic_connectivity_index.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
@@ -160,7 +159,7 @@ static offset_t tableFunc(
 
     storage::IndexInfo indexInfo{
         bindData->indexName,
-        "DYNAMIC_CONNECTIVITY",
+        NativeDynamicConnectivityIndex::TYPE_NAME,
         bindData->nodeTableID,
         std::vector<column_id_t>{},
         std::vector<PhysicalTypeID>{},
