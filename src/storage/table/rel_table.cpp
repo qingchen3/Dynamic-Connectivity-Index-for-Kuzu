@@ -14,6 +14,7 @@
 #include "storage/storage_utils.h"
 #include "storage/table/column_chunk.h"
 #include "storage/table/column_chunk_data.h"
+#include "storage/table/node_table.h"
 #include "storage/table/rel_table_data.h"
 #include "storage/wal/local_wal.h"
 #include "transaction/transaction.h"
@@ -448,6 +449,30 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
         }
     }
 
+    auto& fromNodeTable = StorageManager::Get(*context)
+                              ->getTable(fromNodeTableID)
+                              ->cast<NodeTable>();
+    std::vector<Index*> relBackedIndexes;
+    for (auto& indexHolder : fromNodeTable.getIndexes()) {
+        if (indexHolder.isLoaded() && indexHolder.getIndex()->needCommitRelInsert(tableID)) {
+            relBackedIndexes.push_back(indexHolder.getIndex());
+        }
+    }
+    if (!relBackedIndexes.empty()) {
+        for (auto& [srcOffset, rowIndices] : localRelTable.getCSRIndex(RelDataDirection::FWD)) {
+            for (const auto row : rowIndices) {
+                auto [chunkedGroupIdx, rowInChunk] = StorageUtils::getQuotientRemainder(row,
+                    StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
+                const auto dstOffset = localNodeGroup.getChunkedNodeGroup(chunkedGroupIdx)
+                                           ->getColumnChunk(LOCAL_NBR_NODE_ID_COLUMN_ID)
+                                           .getValue<offset_t>(rowInChunk);
+                for (auto* index : relBackedIndexes) {
+                    index->commitRelInsert(srcOffset, dstOffset);
+                }
+            }
+        }
+    }
+    
     localRelTable.clear(*MemoryManager::Get(*context));
 }
 

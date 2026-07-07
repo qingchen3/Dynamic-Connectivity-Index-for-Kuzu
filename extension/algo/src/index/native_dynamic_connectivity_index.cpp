@@ -44,5 +44,16 @@ bool NativeDynamicConnectivityIndex::connected(node_key_t src, node_key_t dst) c
     return backend->connected(src, dst);
 }
 
+bool NativeDynamicConnectivityIndex::needCommitRelInsert(
+    common::table_id_t relTableID) const {
+    return relTableID == sourceRelTableID;
+}
+
+void NativeDynamicConnectivityIndex::commitRelInsert(common::offset_t srcNodeOffset,
+    common::offset_t dstNodeOffset) {
+    backend->insertEdge(static_cast<int64_t>(srcNodeOffset),
+        static_cast<int64_t>(dstNodeOffset));
+}
+
 } // namespace algo_extension
 } // namespace kuzu
