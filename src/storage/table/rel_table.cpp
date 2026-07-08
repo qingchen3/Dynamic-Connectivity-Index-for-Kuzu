@@ -454,7 +454,7 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
                               ->cast<NodeTable>();
     std::vector<Index*> relBackedIndexes;
     for (auto& indexHolder : fromNodeTable.getIndexes()) {
-        if (indexHolder.isLoaded() && indexHolder.getIndex()->needCommitRelInsert(tableID)) {
+        if (indexHolder.isLoaded() && indexHolder.getIndex()->isBackedByRelTable(tableID)) {
             relBackedIndexes.push_back(indexHolder.getIndex());
         }
     }

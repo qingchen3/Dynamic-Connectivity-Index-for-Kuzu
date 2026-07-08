@@ -150,7 +150,7 @@ public:
         const std::vector<common::ValueVector*>&, InsertState&) {
         // DO NOTHING.
     }
-    virtual bool needCommitRelInsert(common::table_id_t) const { return false; }
+    virtual bool isBackedByRelTable(common::table_id_t) const { return false; }
     virtual void commitRelInsert(common::offset_t /*srcNodeOffset*/, 
         common::offset_t /*dstNodeOffset*/) {}
 

@@ -44,7 +44,7 @@ bool NativeDynamicConnectivityIndex::connected(node_key_t src, node_key_t dst) c
     return backend->connected(src, dst);
 }
 
-bool NativeDynamicConnectivityIndex::needCommitRelInsert(
+bool NativeDynamicConnectivityIndex::isBackedByRelTable(
     common::table_id_t relTableID) const {
     return relTableID == sourceRelTableID;
 }
