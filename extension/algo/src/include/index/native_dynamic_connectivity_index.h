@@ -40,6 +40,8 @@ public:
     bool isBackedByRelTable(common::table_id_t relTableID) const override;
     void commitRelInsert(common::offset_t srcNodeOffset,
         common::offset_t dstNodeOffset) override;
+    void commitRelDelete(common::offset_t srcNodeOffset,
+        common::offset_t dstNodeOffset) override;
 
     std::string getMethod() const {
         return backend->getName();

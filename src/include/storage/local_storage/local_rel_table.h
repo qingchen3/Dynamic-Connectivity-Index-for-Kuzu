@@ -48,12 +48,15 @@ public:
 
     static void initializeScan(TableScanState& state);
     bool scan(const transaction::Transaction* transaction, TableScanState& state) const;
-
+    // (src, dst) node offsets of committed rels deleted by this transaction. Drained
+    // into rel-backed indexes at commit; discarded with the rest of local state on rollback.
+    std::vector<std::pair<common::offset_t, common::offset_t>> pendingRelDeletes;
     void clear(MemoryManager&) override {
         localNodeGroup.reset();
         for (auto& index : directedIndices) {
             index.clear();
         }
+        pendingRelDeletes.clear();
     }
     bool isEmpty() const {
         KU_ASSERT(directedIndices.size() >= 1);

@@ -55,5 +55,11 @@ void NativeDynamicConnectivityIndex::commitRelInsert(common::offset_t srcNodeOff
         static_cast<int64_t>(dstNodeOffset));
 }
 
+void NativeDynamicConnectivityIndex::commitRelDelete(common::offset_t srcNodeOffset,
+    common::offset_t dstNodeOffset) {
+    backend->deleteEdge(static_cast<int64_t>(srcNodeOffset),
+        static_cast<int64_t>(dstNodeOffset));
+}
+
 } // namespace algo_extension
 } // namespace kuzu

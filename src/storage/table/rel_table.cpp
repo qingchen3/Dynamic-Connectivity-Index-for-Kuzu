@@ -259,6 +259,19 @@ bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) 
                 break;
             }
         }
+        if (isDeleted) {
+            // Buffer committed-edge deletion for rel-backed index maintenance at
+            // commit. Locally inserted rels need no buffering: they never reach
+            // the indexes.
+            const auto srcPos = relDeleteState.srcNodeIDVector.state->getSelVector()[0];
+            const auto dstPos = relDeleteState.dstNodeIDVector.state->getSelVector()[0];
+            transaction->getLocalStorage()
+                ->getOrCreateLocalTable(*this)
+                ->cast<LocalRelTable>()
+                .pendingRelDeletes.emplace_back(
+                    relDeleteState.srcNodeIDVector.getValue<nodeID_t>(srcPos).offset,
+                    relDeleteState.dstNodeIDVector.getValue<nodeID_t>(dstPos).offset);
+        }
     }
     if (isDeleted) {
         hasChanges = true;
@@ -410,6 +423,27 @@ void RelTable::pushInsertInfo(const Transaction* transaction, RelDataDirection d
 void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntry,
     LocalTable* localTable) {
     auto& localRelTable = localTable->cast<LocalRelTable>();
+    
+    auto& fromNodeTable = StorageManager::Get(*context)
+                            ->getTable(fromNodeTableID)
+                            ->cast<NodeTable>();
+    std::vector<Index*> relBackedIndexes;
+    for (auto& indexHolder : fromNodeTable.getIndexes()) {
+        if (indexHolder.isLoaded() && indexHolder.getIndex()->isBackedByRelTable(tableID)) {
+            relBackedIndexes.push_back(indexHolder.getIndex());
+        }
+    }
+    // Drain pending deletes before the isEmpty early return (delete-only
+    // transactions have an empty local CSR index) and before the insert scan
+    // (delete-then-reinsert of the same pair must end present in the index).
+    if (!relBackedIndexes.empty()) {
+        for (const auto& [srcOffset, dstOffset] : localRelTable.pendingRelDeletes) {
+            for (auto* index : relBackedIndexes) {
+                index->commitRelDelete(srcOffset, dstOffset);
+            }
+        }
+    }
+
     if (localRelTable.isEmpty()) {
         localTable->clear(*MemoryManager::Get(*context));
         return;
@@ -449,15 +483,6 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
         }
     }
 
-    auto& fromNodeTable = StorageManager::Get(*context)
-                              ->getTable(fromNodeTableID)
-                              ->cast<NodeTable>();
-    std::vector<Index*> relBackedIndexes;
-    for (auto& indexHolder : fromNodeTable.getIndexes()) {
-        if (indexHolder.isLoaded() && indexHolder.getIndex()->isBackedByRelTable(tableID)) {
-            relBackedIndexes.push_back(indexHolder.getIndex());
-        }
-    }
     if (!relBackedIndexes.empty()) {
         for (auto& [srcOffset, rowIndices] : localRelTable.getCSRIndex(RelDataDirection::FWD)) {
             for (const auto row : rowIndices) {
