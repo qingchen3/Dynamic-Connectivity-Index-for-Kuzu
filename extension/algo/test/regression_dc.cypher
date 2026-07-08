@@ -35,3 +35,18 @@ MATCH (a:Person {id: 0}), (b:Person {id: 1}) CREATE (a)-[:Knows]->(b);
 CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 1, 'dc_knows') RETURN *;
 CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 2, 'dc_knows') RETURN *;
 CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_knows') RETURN *;
+
+MATCH (a:Person {id: 0})-[k:Knows]->(b:Person {id: 1}) DELETE k;
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 1, 'dc_knows') RETURN *;
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 1, 2, 'dc_knows') RETURN *;
+
+BEGIN TRANSACTION;
+MATCH (a:Person {id: 1})-[k:Knows]->(b:Person {id: 2}) DELETE k;
+ROLLBACK;
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 1, 2, 'dc_knows') RETURN *;
+
+BEGIN TRANSACTION;
+MATCH (a:Person {id: 1})-[k:Knows]->(b:Person {id: 2}) DELETE k;
+MATCH (a:Person {id: 1}), (b:Person {id: 2}) CREATE (a)-[:Knows]->(b);
+COMMIT;
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 1, 2, 'dc_knows') RETURN *;
