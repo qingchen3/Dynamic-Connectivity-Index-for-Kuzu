@@ -16,8 +16,6 @@ struct DNode {
 
     int key;
     int size = 1;
-    DNode* left = nullptr;
-    DNode* right = nullptr;
     DNode* parent = nullptr;
     std::set<DNode*> children;
     std::set<DNode*> nte;

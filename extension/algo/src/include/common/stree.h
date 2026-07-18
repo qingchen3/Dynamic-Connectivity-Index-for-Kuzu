@@ -30,8 +30,6 @@ private:
         explicit SNode(node_key_t key) : key{key} {}
 
         node_key_t key;
-        SNode* left = nullptr;
-        SNode* right = nullptr;
         SNode* parent = nullptr;
         SNode* skip = nullptr;
         std::set<SNode*> children;
