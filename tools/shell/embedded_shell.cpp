@@ -587,6 +587,130 @@ void EmbeddedShell::run() {
     // `true` when a multiline query is incomplete. See `EmbeddedShell::processInput`.
     continueLine = false;
     currLine = "";
+        // ============================================================
+    // Temporary deterministic experiment for CSR storage tracing.
+    //
+    // true:  run the hardcoded queries and return
+    // false: run the original interactive Kuzu shell
+    // ============================================================
+    const bool runCSRStorageTrace = true;
+
+    if (runCSRStorageTrace) {
+        std::vector<std::string> hardcodedQueries = {
+            R"(LOAD EXTENSION '/Users/qingchen/projects/Dynamic-Connectivity-Index-for-Kuzu/extension/algo/build/libalgo.kuzu_extension';)",
+
+            R"(CREATE NODE TABLE Person(
+                id INT64,
+                PRIMARY KEY(id)
+            );)",
+
+            R"(CREATE REL TABLE Knows(
+                FROM Person TO Person,
+                weight INT64
+            );)",
+
+            R"(CREATE (:Person {id: 0});)",
+            R"(CREATE (:Person {id: 1});)",
+            R"(CREATE (:Person {id: 2});)",
+            R"(CREATE (:Person {id: 3});)",
+
+            // Query 7:
+            // First committed relationship whose FWD bound node is node 1.
+            R"(MATCH (a:Person {id: 1}), (b:Person {id: 2})
+               CREATE (a)-[:Knows {weight: 10}]->(b);)",
+
+            // Query 8:
+            // Insert a relationship for a different FWD bound node.
+            R"(MATCH (a:Person {id: 3}), (b:Person {id: 0})
+               CREATE (a)-[:Knows {weight: 20}]->(b);)",
+
+            // Query 9:
+            // Insert another relationship for source node 1.
+            // This is intended to make node 1's NodeCSRIndex
+            // non-sequential.
+            R"(MATCH (a:Person {id: 1}), (b:Person {id: 3})
+               CREATE (a)-[:Knows {weight: 30}]->(b);)",
+
+            // Verify the base relationship data.
+            R"(MATCH (a:Person)-[k:Knows]->(b:Person)
+               RETURN a.id, b.id, k.weight
+               ORDER BY a.id, b.id;)",
+
+            // Query 11:
+            // Build STree by scanning the existing CSR-backed graph.
+            R"(CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX(
+                   'Person',
+                   'Knows',
+                   'dc_knows',
+                   'stree'
+               ) RETURN *;)",
+
+            R"(CALL DYNAMIC_CONNECTIVITY_QUERY(
+                   'Person',
+                   1,
+                   2,
+                   'dc_knows'
+               ) RETURN *;)",
+
+            // Query 13:
+            // Delete an existing committed relationship.
+            R"(MATCH (a:Person {id: 1})-[k:Knows]->
+                      (b:Person {id: 2})
+               DELETE k;)",
+
+            // Check whether the index observed the committed deletion.
+            R"(CALL DYNAMIC_CONNECTIVITY_QUERY(
+                   'Person',
+                   1,
+                   2,
+                   'dc_knows'
+               ) RETURN *;)",
+
+            // Query 15:
+            // Force committed in-memory CSR data to be checkpointed.
+            R"(CHECKPOINT;)"
+        };
+
+        for (size_t queryIdx = 0;
+             queryIdx < hardcodedQueries.size();
+             ++queryIdx) {
+            // Use a local string rather than only a reference.
+            // This makes the current query easy to inspect in the IDE.
+            std::string query = hardcodedQueries[queryIdx];
+
+            printf(
+                "\n"
+                "============================================================\n"
+                "[CSR_TRACE_QUERY %zu]\n"
+                "%s\n"
+                "============================================================\n",
+                queryIdx, query.c_str());
+
+            // Put an IDE breakpoint on this line.
+            auto queryResult = conn->query(query);
+
+            if (queryResult->isSuccess()) {
+                printInterrupted = false;
+                printExecutionResult(*queryResult);
+            } else {
+                printf(
+                    "[CSR_TRACE_ERROR %zu] %s\n",
+                    queryIdx,
+                    queryResult->getErrorMessage().c_str());
+
+                // Stop after the first error so later observations are not
+                // based on an invalid database state.
+                break;
+            }
+        }
+
+        // Do not enter the original linenoise loop in trace mode.
+        return;
+    }
+
+    // ============================================================
+    // Original interactive-shell implementation remains unchanged.
+    // ============================================================
 
 #ifndef _WIN32
     termios raw{};
