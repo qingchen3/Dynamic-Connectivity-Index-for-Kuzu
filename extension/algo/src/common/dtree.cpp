@@ -144,7 +144,7 @@ namespace dtree_internal {
     //  insert_te return value discarded (DTree.cpp:99)  
     // insert_te returns the (potentially new) root after rebalancing, but insert_edge ignores it. If the root changes, nothing tracks it. 
     DNode* insert_te(DNode* n_u, DNode* n_v, DNode* r_u, DNode* r_v) {
-        if(r_v->size > r_u->size) {
+        if(r_v->size < r_u->size) {
             return link(n_u, r_u, reroot(n_v));
         } else {
             return link(n_v, r_v, reroot(n_u));
