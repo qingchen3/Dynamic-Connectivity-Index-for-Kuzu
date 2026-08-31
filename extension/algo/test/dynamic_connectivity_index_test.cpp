@@ -14,7 +14,6 @@
 
 using namespace kuzu::algo_extension;
 
-
 TEST(DynamicConnectivityIndexTest, STreeIndexInsertAndQueryConnectivity) {
     STreeIndex index;
 
@@ -152,12 +151,15 @@ TEST(DynamicConnectivityIndexFactoryTest, ThrowsOnUnknownMethodName) {
 
 namespace {
 
+constexpr kuzu::common::table_id_t TEST_NODE_TABLE_ID = 1;
+constexpr kuzu::common::table_id_t TEST_REL_TABLE_ID = 2;
+
 std::unique_ptr<kuzu::algo_extension::NativeDynamicConnectivityIndex>
 createNativeIndex(const std::string& indexName, const std::string& method) {
     kuzu::storage::IndexInfo indexInfo{
         indexName,
         "DYNAMIC_CONNECTIVITY",
-        1 /* owner node table ID */,
+        TEST_NODE_TABLE_ID,
         std::vector<kuzu::common::column_id_t>{},
         std::vector<kuzu::common::PhysicalTypeID>{},
         false /* isPrimary */,
@@ -167,36 +169,102 @@ createNativeIndex(const std::string& indexName, const std::string& method) {
         kuzu::algo_extension::NativeDynamicConnectivityIndex>(
         std::move(indexInfo),
         std::make_unique<kuzu::storage::IndexStorageInfo>(),
-        2 /* source relationship table ID */,
+        TEST_REL_TABLE_ID,
         method);
+}
+
+kuzu::common::nodeID_t makeNodeID(
+    kuzu::common::offset_t offset,
+    kuzu::common::table_id_t tableID) {
+    kuzu::common::nodeID_t nodeID;
+    nodeID.offset = offset;
+    nodeID.tableID = tableID;
+    return nodeID;
 }
 
 } // namespace
 
+
 TEST(NativeDynamicConnectivityIndexTest, DelegatesToSTree) {
     auto index = createNativeIndex("dc_stree", "stree");
 
-    index->insertEdge(1, 2);
-    index->insertEdge(2, 3);
+    index->insertEdge(
+        makeNodeID(1, TEST_NODE_TABLE_ID),
+        makeNodeID(2, TEST_NODE_TABLE_ID));
 
-    EXPECT_TRUE(index->connected(1, 3));
+    index->insertEdge(
+        makeNodeID(2, TEST_NODE_TABLE_ID),
+        makeNodeID(3, TEST_NODE_TABLE_ID));
+
+    EXPECT_TRUE(index->connected(
+        makeNodeID(1, TEST_NODE_TABLE_ID),
+        makeNodeID(3, TEST_NODE_TABLE_ID)));
+
     EXPECT_EQ(index->getMethod(), "stree");
-    EXPECT_EQ(index->getSourceRelTableID(), 2);
+    EXPECT_EQ(index->getSourceRelTableID(), TEST_REL_TABLE_ID);
 
-    index->deleteEdge(2, 3);
-    EXPECT_FALSE(index->connected(1, 3));
+    index->deleteEdge(
+        makeNodeID(2, TEST_NODE_TABLE_ID),
+        makeNodeID(3, TEST_NODE_TABLE_ID));
+
+    EXPECT_FALSE(index->connected(
+        makeNodeID(1, TEST_NODE_TABLE_ID),
+        makeNodeID(3, TEST_NODE_TABLE_ID)));
 }
 
 TEST(NativeDynamicConnectivityIndexTest, DelegatesToDTree) {
     auto index = createNativeIndex("dc_dtree", "dtree");
 
-    index->insertEdge(10, 20);
-    index->insertEdge(20, 30);
+    index->insertEdge(
+        makeNodeID(10, TEST_NODE_TABLE_ID),
+        makeNodeID(20, TEST_NODE_TABLE_ID));
 
-    EXPECT_TRUE(index->connected(10, 30));
+    index->insertEdge(
+        makeNodeID(20, TEST_NODE_TABLE_ID),
+        makeNodeID(30, TEST_NODE_TABLE_ID));
+
+    EXPECT_TRUE(index->connected(
+        makeNodeID(10, TEST_NODE_TABLE_ID),
+        makeNodeID(30, TEST_NODE_TABLE_ID)));
+
     EXPECT_EQ(index->getMethod(), "dtree");
-    EXPECT_EQ(index->getSourceRelTableID(), 2);
+    EXPECT_EQ(index->getSourceRelTableID(), TEST_REL_TABLE_ID);
 
-    index->deleteEdge(20, 30);
-    EXPECT_FALSE(index->connected(10, 30));
+    index->deleteEdge(
+        makeNodeID(20, TEST_NODE_TABLE_ID),
+        makeNodeID(30, TEST_NODE_TABLE_ID));
+
+    EXPECT_FALSE(index->connected(
+        makeNodeID(10, TEST_NODE_TABLE_ID),
+        makeNodeID(30, TEST_NODE_TABLE_ID)));
 }
+
+
+TEST(NativeDynamicConnectivityIndexTest, RejectsUnexpectedNodeTable) {
+    auto index = createNativeIndex("dc_stree", "stree");
+
+    EXPECT_THROW(
+        index->insertEdge(
+            makeNodeID(1, TEST_NODE_TABLE_ID),
+            makeNodeID(2, TEST_NODE_TABLE_ID + 1)),
+        kuzu::common::RuntimeException);
+}
+
+
+TEST(NativeDynamicConnectivityIndexTest, CommitRelInsertAndDeleteDelegateToBackend) {
+    auto index = createNativeIndex("dc_stree", "stree");
+
+    index->commitRelInsert(1, 2);
+    index->commitRelInsert(2, 3);
+
+    EXPECT_TRUE(index->connected(
+        makeNodeID(1, TEST_NODE_TABLE_ID),
+        makeNodeID(3, TEST_NODE_TABLE_ID)));
+
+    index->commitRelDelete(2, 3);
+
+    EXPECT_FALSE(index->connected(
+        makeNodeID(1, TEST_NODE_TABLE_ID),
+        makeNodeID(3, TEST_NODE_TABLE_ID)));
+}
+

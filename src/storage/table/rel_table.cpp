@@ -244,9 +244,19 @@ bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) 
     const auto& relDeleteState = deleteState.cast<RelTableDeleteState>();
     KU_ASSERT(relDeleteState.relIDVector.state->getSelVector().getSelSize() == 1);
     const auto relIDPos = relDeleteState.relIDVector.state->getSelVector()[0];
+    
+    // get complete relationship inforamtion before deletion
+    const auto deletedRelID =
+        relDeleteState.relIDVector
+            .getValue<internalID_t>(relIDPos);
+
     bool isDeleted = false;
-    if (const auto relOffset = relDeleteState.relIDVector.readNodeOffset(relIDPos);
-        relOffset >= StorageConstants::MAX_NUM_ROWS_IN_TABLE) {
+    
+    //if (const auto relOffset = relDeleteState.relIDVector.readNodeOffset(relIDPos);
+    const auto debugRelOffset = relDeleteState.relIDVector.readNodeOffset(relIDPos);
+    KU_ASSERT(deletedRelID.offset == debugRelOffset);
+
+    if (deletedRelID.offset >= StorageConstants::MAX_NUM_ROWS_IN_TABLE) {
         const auto localTable = transaction->getLocalStorage()->getLocalTable(tableID);
         KU_ASSERT(localTable);
         isDeleted = localTable->delete_(transaction, deleteState);
@@ -265,12 +275,18 @@ bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) 
             // the indexes.
             const auto srcPos = relDeleteState.srcNodeIDVector.state->getSelVector()[0];
             const auto dstPos = relDeleteState.dstNodeIDVector.state->getSelVector()[0];
-            transaction->getLocalStorage()
+            const auto srcOffset = relDeleteState.srcNodeIDVector.getValue<nodeID_t>(srcPos).offset;
+            const auto dstOffset = relDeleteState.dstNodeIDVector.getValue<nodeID_t>(dstPos).offset;
+            auto& localRelTable = 
+                transaction->getLocalStorage()
                 ->getOrCreateLocalTable(*this)
-                ->cast<LocalRelTable>()
-                .pendingRelDeletes.emplace_back(
-                    relDeleteState.srcNodeIDVector.getValue<nodeID_t>(srcPos).offset,
-                    relDeleteState.dstNodeIDVector.getValue<nodeID_t>(dstPos).offset);
+                ->cast<LocalRelTable>();
+
+            localRelTable.pendingRelDeletes.push_back(
+                    PendingRelDelete {
+                        srcOffset,
+                        dstOffset,
+                        deletedRelID});
         }
     }
     if (isDeleted) {
@@ -437,12 +453,31 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
     // transactions have an empty local CSR index) and before the insert scan
     // (delete-then-reinsert of the same pair must end present in the index).
     if (!relBackedIndexes.empty()) {
-        for (const auto& [srcOffset, dstOffset] : localRelTable.pendingRelDeletes) {
+        for (const auto& [srcOffset, dstOffset, relID] : localRelTable.pendingRelDeletes) {
             for (auto* index : relBackedIndexes) {
-                index->commitRelDelete(srcOffset, dstOffset);
+                 index->commitRelDelete(context, srcOffset, dstOffset, relID);
             }
         }
     }
+
+    // localNodeGroup before  updateRelOffsets() : transaction-local stage
+
+    auto& localNodeGroupT = localRelTable.getLocalNodeGroup();
+    std::unordered_map<row_idx_t, offset_t> offsetsBeforeUpdate;
+
+    for (auto& [srcOffset, rowIndices] : localRelTable.getCSRIndex(RelDataDirection::FWD)) {
+        for (const auto row : rowIndices) {
+            auto [chunkedGroupIdx, rowInChunk] = StorageUtils::getQuotientRemainder(row,
+                StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
+            auto* chunkedGroup = localNodeGroupT.getChunkedNodeGroup(chunkedGroupIdx); 
+
+            const auto temporaryOffset = chunkedGroup->getColumnChunk(LOCAL_REL_ID_COLUMN_ID)
+                                                        .getValue<offset_t>(rowInChunk);
+            KU_ASSERT(temporaryOffset == StorageConstants::MAX_NUM_ROWS_IN_TABLE + row);
+            offsetsBeforeUpdate.emplace(row, temporaryOffset);
+        }
+    }
+    //
 
     if (localRelTable.isEmpty()) {
         localTable->clear(*MemoryManager::Get(*context));
@@ -488,11 +523,17 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
             for (const auto row : rowIndices) {
                 auto [chunkedGroupIdx, rowInChunk] = StorageUtils::getQuotientRemainder(row,
                     StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
-                const auto dstOffset = localNodeGroup.getChunkedNodeGroup(chunkedGroupIdx)
-                                           ->getColumnChunk(LOCAL_NBR_NODE_ID_COLUMN_ID)
+                auto* chunkedGroup = localNodeGroup.getChunkedNodeGroup(chunkedGroupIdx); 
+                const auto dstOffset = chunkedGroup->getColumnChunk(LOCAL_NBR_NODE_ID_COLUMN_ID)
                                            .getValue<offset_t>(rowInChunk);
+                auto& relIDColumn = chunkedGroup->getColumnChunk(LOCAL_REL_ID_COLUMN_ID);
+                const auto relOffset = relIDColumn.getValue<offset_t>(rowInChunk);
+
+                // const auto temporaryOffset = offsetsBeforeUpdate.at(row);
+
+                internalID_t relID {relOffset, tableID};
                 for (auto* index : relBackedIndexes) {
-                    index->commitRelInsert(srcOffset, dstOffset);
+                    index->commitRelInsert(context, srcOffset, dstOffset, relID);
                 }
             }
         }

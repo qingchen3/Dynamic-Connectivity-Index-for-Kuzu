@@ -14,6 +14,7 @@
 #include <iomanip>
 #include <regex>
 #include <sstream>
+#include <cstdio>
 
 #include "binder/binder.h"
 #include "catalog/catalog.h"
@@ -587,7 +588,7 @@ void EmbeddedShell::run() {
     // `true` when a multiline query is incomplete. See `EmbeddedShell::processInput`.
     continueLine = false;
     currLine = "";
-        // ============================================================
+    // ============================================================
     // Temporary deterministic experiment for CSR storage tracing.
     //
     // true:  run the hardcoded queries and return
@@ -596,87 +597,410 @@ void EmbeddedShell::run() {
     const bool runCSRStorageTrace = true;
 
     if (runCSRStorageTrace) {
+
+        const char* traceOutputPath =
+            "/Users/qingchen/projects/"
+            "Dynamic-Connectivity-Index-for-Kuzu/"
+            "csr_correctness_trace.log";
+
+        FILE* traceOutput =
+            freopen(traceOutputPath, "w", stdout);
+
+        if (traceOutput == nullptr) {
+            fprintf(
+                stderr,
+                "Failed to open trace output file: %s\n",
+                traceOutputPath);
+            return;
+        }
+
+        setvbuf(stdout, nullptr, _IOLBF, 0);
+
+        setMode("csv");
+        setStats("off");
+
+        fprintf(
+            stderr,
+            "Writing CSR trace to:\n%s\n",
+            traceOutputPath);
+
+        // Schema and nodes.
         std::vector<std::string> hardcodedQueries = {
-            R"(LOAD EXTENSION '/Users/qingchen/projects/Dynamic-Connectivity-Index-for-Kuzu/extension/algo/build/libalgo.kuzu_extension';)",
+            R"(
+                LOAD EXTENSION
+                '/Users/qingchen/projects/Dynamic-Connectivity-Index-for-Kuzu/extension/algo/build/libalgo.kuzu_extension';
+            )",
 
-            R"(CREATE NODE TABLE Person(
-                id INT64,
-                PRIMARY KEY(id)
-            );)",
+            R"(
+                CREATE NODE TABLE Person(
+                    id INT64,
+                    PRIMARY KEY(id)
+                );
+            )",
 
-            R"(CREATE REL TABLE Knows(
-                FROM Person TO Person,
-                weight INT64
-            );)",
-
-            R"(CREATE (:Person {id: 0});)",
-            R"(CREATE (:Person {id: 1});)",
-            R"(CREATE (:Person {id: 2});)",
-            R"(CREATE (:Person {id: 3});)",
-
-            // Query 7:
-            // First committed relationship whose FWD bound node is node 1.
-            R"(MATCH (a:Person {id: 1}), (b:Person {id: 2})
-               CREATE (a)-[:Knows {weight: 10}]->(b);)",
-
-            // Query 8:
-            // Insert a relationship for a different FWD bound node.
-            R"(MATCH (a:Person {id: 3}), (b:Person {id: 0})
-               CREATE (a)-[:Knows {weight: 20}]->(b);)",
-
-            // Query 9:
-            // Insert another relationship for source node 1.
-            // This is intended to make node 1's NodeCSRIndex
-            // non-sequential.
-            R"(MATCH (a:Person {id: 1}), (b:Person {id: 3})
-               CREATE (a)-[:Knows {weight: 30}]->(b);)",
-
-            // Verify the base relationship data.
-            R"(MATCH (a:Person)-[k:Knows]->(b:Person)
-               RETURN a.id, b.id, k.weight
-               ORDER BY a.id, b.id;)",
-
-            // Query 11:
-            // Build STree by scanning the existing CSR-backed graph.
-            R"(CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX(
-                   'Person',
-                   'Knows',
-                   'dc_knows',
-                   'stree'
-               ) RETURN *;)",
-
-            R"(CALL DYNAMIC_CONNECTIVITY_QUERY(
-                   'Person',
-                   1,
-                   2,
-                   'dc_knows'
-               ) RETURN *;)",
-
-            // Query 13:
-            // Delete an existing committed relationship.
-            R"(MATCH (a:Person {id: 1})-[k:Knows]->
-                      (b:Person {id: 2})
-               DELETE k;)",
-
-            // Check whether the index observed the committed deletion.
-            R"(CALL DYNAMIC_CONNECTIVITY_QUERY(
-                   'Person',
-                   1,
-                   2,
-                   'dc_knows'
-               ) RETURN *;)",
-
-            // Query 15:
-            // Force committed in-memory CSR data to be checkpointed.
-            R"(CHECKPOINT;)"
+            R"(
+                CREATE REL TABLE Knows(
+                    FROM Person TO Person,
+                    eid INT64
+                );
+            )"
         };
 
+        // Insert nodes in order so property IDs and internal offsets
+        // should both be 0,...,10.
+        for (int64_t id = 0; id <= 10; ++id) {
+            hardcodedQueries.push_back(
+                "CREATE (:Person {id: " +
+                std::to_string(id) +
+                "});");
+        }
+
+        // Confirm property-ID-to-offset mapping.
+        hardcodedQueries.push_back(R"(
+            MATCH (n:Person)
+            RETURN n.id, ID(n)
+            ORDER BY n.id;
+        )");
+
+        // ============================================================
+        // 2. Create four empty indexes.
+        // ============================================================
+        hardcodedQueries.push_back(R"(
+            CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX(
+                'Person',
+                'Knows',
+                'dc_dtree',
+                'dtree'
+            ) RETURN *;
+        )");
+
+        hardcodedQueries.push_back(R"(
+            CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX(
+                'Person',
+                'Knows',
+                'dc_dtree_csr',
+                'dtree_csr'
+            ) RETURN *;
+        )");
+
+        hardcodedQueries.push_back(R"(
+            CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX(
+                'Person',
+                'Knows',
+                'dc_stree',
+                'stree'
+            ) RETURN *;
+        )");
+
+        hardcodedQueries.push_back(R"(
+            CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX(
+                'Person',
+                'Knows',
+                'dc_stree_csr',
+                'stree_csr'
+            ) RETURN *;
+        )");
+
+        // Define appendCommittedInsert()
+        auto appendCommittedInsert =
+            [&](int64_t eid, int64_t src, int64_t dst) {
+                hardcodedQueries.push_back("BEGIN TRANSACTION;");
+
+                hardcodedQueries.push_back(
+                    "MATCH "
+                    "(a:Person {id: " +
+                    std::to_string(src) +
+                    "}), "
+                    "(b:Person {id: " +
+                    std::to_string(dst) +
+                    "}) "
+                    "CREATE "
+                    "(a)-[:Knows {eid: " +
+                    std::to_string(eid) +
+                    "}]->(b);");
+
+                hardcodedQueries.push_back("COMMIT;");
+            };
+
+        // Append the initial e0,...,e11 insertions
+
+        appendCommittedInsert(0, 0, 1);
+        appendCommittedInsert(1, 1, 2);
+        appendCommittedInsert(2, 2, 3);
+        appendCommittedInsert(3, 3, 4);
+        appendCommittedInsert(4, 4, 5);
+        appendCommittedInsert(5, 5, 6);
+        appendCommittedInsert(6, 6, 7);
+
+        // Non-tree replacement candidate.
+        appendCommittedInsert(7, 0, 4);
+
+        // Non-tree edge.
+        appendCommittedInsert(8, 5, 7);
+
+        // Component {8,9,10}.
+        appendCommittedInsert(9, 8, 9);
+        appendCommittedInsert(10, 9, 10);
+
+        // Non-tree edge in the second component.
+        appendCommittedInsert(11, 8, 10);
+
+        // Create the projected graph 
+        hardcodedQueries.push_back(R"(
+            CALL project_graph(
+                'ConnectivityGraph',
+                ['Person'],
+                ['Knows']
+            );
+        )");
+
+        // define index, BFS, WCC, deletion and verification helpers.
+        auto appendIndexQueries =
+            [&](int64_t u, int64_t v) {
+                const std::vector<std::string> indexNames = {
+                    "dc_dtree",
+                    "dc_dtree_csr",
+                    "dc_stree",
+                    "dc_stree_csr"
+                };
+
+                for (const auto& indexName : indexNames) {
+                    hardcodedQueries.push_back(
+                        "CALL DYNAMIC_CONNECTIVITY_QUERY("
+                        "'Person', " +
+                        std::to_string(u) + ", " +
+                        std::to_string(v) + ", '" +
+                        indexName +
+                        "') RETURN *;");
+                }
+            };
+
+        auto appendBFSQuery =
+            [&](int64_t u, int64_t v) {
+                hardcodedQueries.push_back(
+                    "MATCH "
+                    "(a:Person {id: " +
+                    std::to_string(u) +
+                    "}), "
+                    "(b:Person {id: " +
+                    std::to_string(v) +
+                    "}) "
+                    "MATCH "
+                    "(a)-[:Knows* SHORTEST 1..10]-(b) "
+                    "RETURN count(*) AS bfsPathCount;");
+            };
+
+        auto appendWCCQuery = [&]() {
+            hardcodedQueries.push_back(R"(
+                CALL weakly_connected_components(
+                    'ConnectivityGraph'
+                )
+                RETURN
+                    group_id,
+                    collect(node.id) AS members
+                ORDER BY group_id;
+            )");
+        };
+
+        auto appendVerification =
+            [&](int64_t u, int64_t v) {
+                // Four dynamic-connectivity indexes.
+                appendIndexQueries(u, v);
+
+                // Independent Kuzu BFS query.
+                appendBFSQuery(u, v);
+            };
+
+        auto appendCommittedDelete =
+            [&](int64_t eid) {
+                hardcodedQueries.push_back("BEGIN TRANSACTION;");
+
+                hardcodedQueries.push_back(
+                    "MATCH ()-[r:Knows]->() "
+                    "WHERE r.eid = " +
+                    std::to_string(eid) +
+                    " DELETE r;");
+
+                hardcodedQueries.push_back("COMMIT;");
+            };
+
+        auto appendRelCount =
+            [&](int64_t eid) {
+                hardcodedQueries.push_back(
+                    "MATCH ()-[r:Knows]->() "
+                    "WHERE r.eid = " +
+                    std::to_string(eid) +
+                    " RETURN count(r) AS relCount;");
+            };
+
+        auto appendTotalRelCount = [&]() {
+            hardcodedQueries.push_back(R"(
+                MATCH ()-[r:Knows]->()
+                RETURN count(r) AS totalRelCount;
+            )");
+        };
+
+        auto appendSnapshotMarker =
+            [&](const std::string& snapshot,
+                int64_t expectedTotalRelCount) {
+                hardcodedQueries.push_back(
+                    "RETURN '" +
+                    snapshot +
+                    "' AS snapshot, " +
+                    std::to_string(expectedTotalRelCount) +
+                    " AS expectedTotalRelCount;");
+            };
+
+        // Run the same six pairs at every snapshot.
+        auto appendSnapshotVerification =
+            [&](const std::string& snapshot,
+                int64_t expectedTotalRelCount) {
+                appendSnapshotMarker(
+                    snapshot,
+                    expectedTotalRelCount);
+
+                appendTotalRelCount();
+
+                appendVerification(0, 7);
+                appendVerification(0, 9);
+                appendVerification(8, 10);
+                appendVerification(5, 7);
+                appendVerification(2, 3);
+                appendVerification(4, 5);
+
+                appendWCCQuery();
+            };
+
+        // ============================================================
+        // 7. S0: verify the initial graph.
+        //
+        // Components:
+        //   {0,1,2,3,4,5,6,7}
+        //   {8,9,10}
+        //
+        // Expected:
+        //   connected(0,7)  = true
+        //   connected(0,9)  = false
+        //   connected(8,10) = true
+        //   connected(5,7)  = true
+        //   connected(2,3)  = true
+        //   connected(4,5)  = true
+        // ============================================================
+        appendSnapshotVerification(
+            "S0_INITIAL",
+            12);
+
+        // ============================================================
+        // 8. S1: delete non-tree edge e8=(5,7).
+        //
+        // Connectivity should not change because 5-6-7 remains.
+        // ============================================================
+        appendCommittedDelete(8);
+
+        // Prove that the base relationship was actually deleted.
+        appendRelCount(8); // Expected: 0.
+
+        appendSnapshotVerification(
+            "S1_DELETE_NON_TREE_E8",
+            11);
+
+        // ============================================================
+        // 9. S2: delete tree edge e2=(2,3).
+        //
+        // Replacement e7=(0,4) should reconnect the forest.
+        // Connectivity should remain unchanged.
+        // ============================================================
+        appendCommittedDelete(2);
+
+        // Prove that e2 was deleted from the base relationship table.
+        appendRelCount(2); // Expected: 0.
+
+        appendSnapshotVerification(
+            "S2_DELETE_TREE_E2_WITH_REPLACEMENT",
+            10);
+
+        // ============================================================
+        // 10. S3: delete bridge e4=(4,5).
+        //
+        // Expected components:
+        //   {0,1,2,3,4}
+        //   {5,6,7}
+        //   {8,9,10}
+        //
+        // Expected:
+        //   connected(0,7) = false
+        //   connected(4,5) = false
+        //   connected(5,7) = true
+        // ============================================================
+        appendCommittedDelete(4);
+
+        appendRelCount(4); // Expected: 0.
+
+        appendSnapshotVerification(
+            "S3_DELETE_BRIDGE_E4",
+            9);
+
+        // ============================================================
+        // 11. S4: insert e12=(2,6) and reconnect the component.
+        //
+        // Expected components:
+        //   {0,1,2,3,4,5,6,7}
+        //   {8,9,10}
+        // ============================================================
+        appendCommittedInsert(12, 2, 6);
+
+        appendRelCount(12); // Expected: 1.
+
+        appendSnapshotVerification(
+            "S4_INSERT_E12_RECONNECT",
+            10);
+
+        // ============================================================
+        // 12. S5: insert e13=(1,9), then roll back.
+        //
+        // Components must remain separate.
+        // ============================================================
+        hardcodedQueries.push_back(
+            "BEGIN TRANSACTION;");
+
+        hardcodedQueries.push_back(R"(
+            MATCH
+                (a:Person {id: 1}),
+                (b:Person {id: 9})
+            CREATE
+                (a)-[:Knows {eid: 13}]->(b);
+        )");
+
+        hardcodedQueries.push_back(
+            "ROLLBACK;");
+
+        // e13 must not exist after rollback.
+        appendRelCount(13); // Expected: 0.
+
+        appendSnapshotVerification(
+            "S5_ROLLBACK_E13",
+            10);
+
+        // ============================================================
+        // 13. S6: checkpoint and verify no logical change.
+        // ============================================================
+        hardcodedQueries.push_back(
+            "CHECKPOINT;");
+
+        appendSnapshotVerification(
+            "S6_AFTER_CHECKPOINT",
+            10);
+
+        // ============================================================
+        // 14. Execute hardcodedQueries in order.
+        // ============================================================
         for (size_t queryIdx = 0;
-             queryIdx < hardcodedQueries.size();
-             ++queryIdx) {
-            // Use a local string rather than only a reference.
-            // This makes the current query easy to inspect in the IDE.
-            std::string query = hardcodedQueries[queryIdx];
+            queryIdx < hardcodedQueries.size();
+            ++queryIdx) {
+            // Keep a local copy so the query is easy to inspect
+            // in the VS Code debugger.
+            std::string query =
+                hardcodedQueries[queryIdx];
 
             printf(
                 "\n"
@@ -684,10 +1008,11 @@ void EmbeddedShell::run() {
                 "[CSR_TRACE_QUERY %zu]\n"
                 "%s\n"
                 "============================================================\n",
-                queryIdx, query.c_str());
+                queryIdx,
+                query.c_str());
 
-            // Put an IDE breakpoint on this line.
-            auto queryResult = conn->query(query);
+            auto queryResult =
+                conn->query(query);
 
             if (queryResult->isSuccess()) {
                 printInterrupted = false;
@@ -696,15 +1021,18 @@ void EmbeddedShell::run() {
                 printf(
                     "[CSR_TRACE_ERROR %zu] %s\n",
                     queryIdx,
-                    queryResult->getErrorMessage().c_str());
+                    queryResult
+                        ->getErrorMessage()
+                        .c_str());
 
-                // Stop after the first error so later observations are not
-                // based on an invalid database state.
+                // Stop immediately: later observations would otherwise
+                // be based on an invalid database state.
                 break;
             }
         }
 
-        // Do not enter the original linenoise loop in trace mode.
+        // Do not enter the original interactive linenoise loop.
+        fflush(stdout);
         return;
     }
 

@@ -63,6 +63,20 @@ static std::unique_ptr<TableFuncSharedState> initSharedState(
     return std::make_unique<DynamicConnectivityQuerySharedState>();
 }
 
+namespace {
+
+common::nodeID_t makeNodeID(
+    int64_t rawOffset, common::table_id_t tableID) {
+    if (rawOffset < 0) {
+        throw RuntimeException{
+            stringFormat("Node offset must be non-negative, but got {}.", rawOffset)};
+    }
+    return common::nodeID_t{
+        static_cast<common::offset_t>(rawOffset), tableID};
+}
+
+} // namespace
+
 static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) {
     traceDyn("4. tableFunc entered");
 
@@ -96,8 +110,12 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
 
     traceWithThread("4c. tableFunc: Won the race, emitting 1 row");
 
+    auto srcNodeID = makeNodeID(bindData->src, bindData->nodeTableID);
+    auto dstNodeID = makeNodeID(bindData->dst, bindData->nodeTableID);
+
     const auto isConnected =
-        index.connected(bindData->src, bindData->dst);
+        index.connected(srcNodeID, dstNodeID);
+        //index.connected(bindData->src, bindData->dst);
 
     auto& outputVector = output.dataChunk.getValueVectorMutable(0);
     auto pos = output.dataChunk.state->getSelVector()[0];

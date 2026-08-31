@@ -136,7 +136,8 @@ static offset_t buildIndexFromExistingRels(main::ClientContext* context,
         for (auto chunk : graph.scanFwd(srcNodeID, *scanState)) {
             chunk.forEach([&](auto neighbors, auto, auto i) {
                 auto dstNodeID = neighbors[i];
-                index.insertEdge(srcOffset, dstNodeID.offset);
+                //index.insertEdge(srcOffset, dstNodeID.offset);
+                index.insertEdge(srcNodeID, dstNodeID);
                 numInsertedEdges++;
             });
         }

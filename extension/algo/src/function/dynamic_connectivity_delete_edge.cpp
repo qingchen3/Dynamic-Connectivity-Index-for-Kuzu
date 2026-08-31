@@ -102,7 +102,17 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
             stringFormat("Index {} is not a dynamic connectivity index.", bindData->indexName));
     }
     auto& dcIndex = index->cast<NativeDynamicConnectivityIndex>();
-    dcIndex.deleteEdge(bindData->src, bindData->dst);
+    //auto srcNodeID = makeNodeID(bindData->src, bindData->nodeTableID);
+    nodeID_t srcNodeID{static_cast<offset_t>(bindData->src), bindData->nodeTableID}; 
+    //auto dstNodeID = makeNodeID(bindData->src, bindData->nodeTableID);
+    nodeID_t dstNodeID{static_cast<offset_t>(bindData->dst), bindData->nodeTableID}; 
+    //dcIndex.deleteEdge(bindData->src, bindData->dst);
+
+    throw common::RuntimeException{
+        "Direct index deletion is unsupported. Delete the relationship "
+        "from the base relationship table using Cypher DELETE."
+    };
+    //dcIndex.deleteEdge(srcNodeID, dstNodeID);
     auto& outputVector = output.dataChunk.getValueVectorMutable(0);
     auto pos = output.dataChunk.state->getSelVector()[0];
     outputVector.setValue(pos, stringFormat("Deleted edge ({}, {}) from index {}.", bindData->src,

@@ -108,7 +108,12 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
     }
 
     auto& index = indexOpt.value()->cast<NativeDynamicConnectivityIndex>();
-    index.insertEdge(bindData->src, bindData->dst);
+    //index.insertEdge(bindData->src, bindData->dst);
+    //auto srcNodeID = makeNodeID(bindData->src, bindData->nodeTableID);
+    nodeID_t srcNodeID{static_cast<offset_t>(bindData->src), bindData->nodeTableID}; 
+    //auto dstNodeID = makeNodeID(bindData->src, bindData->nodeTableID);
+    nodeID_t dstNodeID{static_cast<offset_t>(bindData->dst), bindData->nodeTableID}; 
+    index.insertEdge(srcNodeID, dstNodeID);
 
     auto& outputVector = output.dataChunk.getValueVectorMutable(0);
     auto pos = output.dataChunk.state->getSelVector()[0];
