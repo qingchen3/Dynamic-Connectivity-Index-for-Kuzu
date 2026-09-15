@@ -81,7 +81,6 @@ void NativeDynamicConnectivityIndex::deleteEdge(
     common::nodeID_t src,
     common::nodeID_t dst,
     const DynamicConnectivityIndex::NeighborProvider& getNeighbors) {
-
     backend->deleteEdge(
         toBackendKey(src),
         toBackendKey(dst),
@@ -199,11 +198,6 @@ void NativeDynamicConnectivityIndex::commitRelInsert(
     common::offset_t dstNodeOffset, 
     common::internalID_t relID) {
     KU_ASSERT(relID.tableID == sourceRelTableID);
-    
-    //const auto srcIncidentRels =
-    //    collectIncidentRels(context, srcNodeOffset);
-    //const auto dstIncidentRels =
-    //    collectIncidentRels(context, dstNodeOffset);
     commitRelInsert(srcNodeOffset, dstNodeOffset);
 }
 
@@ -212,7 +206,6 @@ void NativeDynamicConnectivityIndex::commitRelDelete(
     common::offset_t srcNodeOffset,
     common::offset_t dstNodeOffset,
     common::internalID_t relID) {
-
     KU_ASSERT(relID.tableID == sourceRelTableID);
 
     DynamicConnectivityIndex::NeighborProvider getNeighbors =
@@ -255,9 +248,6 @@ void NativeDynamicConnectivityIndex::commitRelDelete(
 
 void NativeDynamicConnectivityIndex::commitRelDelete(common::offset_t srcNodeOffset,
     common::offset_t dstNodeOffset) {
-    //backend->deleteEdge(
-    //    toBackendKey(srcNodeOffset), 
-    //    toBackendKey(dstNodeOffset));
     return;
 }
 
