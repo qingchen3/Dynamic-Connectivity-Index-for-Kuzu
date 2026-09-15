@@ -1,6 +1,7 @@
 #include "storage/table/rel_table.h"
 
 #include <algorithm>
+#include <atomic>
 
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/exception/message.h"
@@ -460,25 +461,6 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
         }
     }
 
-    // localNodeGroup before  updateRelOffsets() : transaction-local stage
-
-    auto& localNodeGroupT = localRelTable.getLocalNodeGroup();
-    std::unordered_map<row_idx_t, offset_t> offsetsBeforeUpdate;
-
-    for (auto& [srcOffset, rowIndices] : localRelTable.getCSRIndex(RelDataDirection::FWD)) {
-        for (const auto row : rowIndices) {
-            auto [chunkedGroupIdx, rowInChunk] = StorageUtils::getQuotientRemainder(row,
-                StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
-            auto* chunkedGroup = localNodeGroupT.getChunkedNodeGroup(chunkedGroupIdx); 
-
-            const auto temporaryOffset = chunkedGroup->getColumnChunk(LOCAL_REL_ID_COLUMN_ID)
-                                                        .getValue<offset_t>(rowInChunk);
-            KU_ASSERT(temporaryOffset == StorageConstants::MAX_NUM_ROWS_IN_TABLE + row);
-            offsetsBeforeUpdate.emplace(row, temporaryOffset);
-        }
-    }
-    //
-
     if (localRelTable.isEmpty()) {
         localTable->clear(*MemoryManager::Get(*context));
         return;
@@ -487,11 +469,6 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
     updateRelOffsets(localRelTable);
     // For both forward and backward directions, re-org local storage into compact CSR node groups.
     auto& localNodeGroup = localRelTable.getLocalNodeGroup();
-    // Scan from local node group and write to WAL.
-    std::vector<column_id_t> columnIDsToScan;
-    for (auto i = 0u; i < localRelTable.getNumColumns(); i++) {
-        columnIDsToScan.push_back(i);
-    }
 
     std::vector<column_id_t> columnIDsToCommit;
     columnIDsToCommit.push_back(0); // NBR column.
@@ -528,8 +505,6 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
                                            .getValue<offset_t>(rowInChunk);
                 auto& relIDColumn = chunkedGroup->getColumnChunk(LOCAL_REL_ID_COLUMN_ID);
                 const auto relOffset = relIDColumn.getValue<offset_t>(rowInChunk);
-
-                // const auto temporaryOffset = offsetsBeforeUpdate.at(row);
 
                 internalID_t relID {relOffset, tableID};
                 for (auto* index : relBackedIndexes) {
