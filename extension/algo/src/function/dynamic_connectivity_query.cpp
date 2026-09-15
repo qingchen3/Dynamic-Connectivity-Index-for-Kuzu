@@ -14,8 +14,6 @@
 #include "storage/table/node_table.h"
 #include "transaction/transaction.h"
 
-#include <fstream>
-
 
 using namespace kuzu::common;
 using namespace kuzu::function;
@@ -23,16 +21,6 @@ using namespace kuzu::function;
 namespace kuzu {
 namespace algo_extension {
 
-void traceDyn(const char* msg) {
-    std::ofstream out("/tmp/kuzu_dyn_trace.log", std::ios::app);
-    out << msg << std::endl;
-}
-
-void traceWithThread(const std::string& msg) {
-    std::stringstream ss;
-    ss << msg << " | Thread ID: " << std::this_thread::get_id();
-    traceDyn(ss.str().c_str());
-}
 
 struct DynamicConnectivityQueryBindData final : TableFuncBindData {
     table_id_t nodeTableID;
@@ -59,7 +47,6 @@ struct DynamicConnectivityQuerySharedState final : TableFuncSharedState {
 
 static std::unique_ptr<TableFuncSharedState> initSharedState(
     const TableFuncInitSharedStateInput&) {
-    traceDyn("3. initSharedState called");
     return std::make_unique<DynamicConnectivityQuerySharedState>();
 }
 
@@ -78,13 +65,10 @@ common::nodeID_t makeNodeID(
 } // namespace
 
 static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) {
-    traceDyn("4. tableFunc entered");
-
     auto sharedState = input.sharedState->ptrCast<DynamicConnectivityQuerySharedState>();
 
     bool expected = false;
     if (!sharedState->emitted.compare_exchange_strong(expected, true)) {
-        traceWithThread("4b. tableFunc: Lost the race, returning 0");
         return 0;
     }
 
@@ -101,21 +85,11 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
     auto& index =
         indexOpt.value()->cast<NativeDynamicConnectivityIndex>();
 
-    std::stringstream ss;
-    ss << "index=" << static_cast<const void*>(&index)
-    << ", src=" << bindData->src
-    << ", dst=" << bindData->dst
-    << ", method=" << index.getMethod();
-    traceWithThread(ss.str());
-
-    traceWithThread("4c. tableFunc: Won the race, emitting 1 row");
-
     auto srcNodeID = makeNodeID(bindData->src, bindData->nodeTableID);
     auto dstNodeID = makeNodeID(bindData->dst, bindData->nodeTableID);
 
     const auto isConnected =
         index.connected(srcNodeID, dstNodeID);
-        //index.connected(bindData->src, bindData->dst);
 
     auto& outputVector = output.dataChunk.getValueVectorMutable(0);
     auto pos = output.dataChunk.state->getSelVector()[0];
@@ -125,7 +99,6 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
 
 static std::unique_ptr<TableFuncBindData> bindFunc(
     main::ClientContext* context, const TableFuncBindInput* input) {
-    traceDyn("2. bindFunc called");
 
     auto tableName = input->getLiteralVal<std::string>(0);
     auto src = input->getLiteralVal<int64_t>(1);
@@ -167,9 +140,6 @@ static std::unique_ptr<TableFuncBindData> bindFunc(
 }
 
 function_set DynamicConnectivityQueryFunction::getFunctionSet() {
-    std::ofstream clearFile("/tmp/kuzu_dyn_trace.log", std::ios::trunc);
-    traceDyn("1. getFunctionSet called");
-
     function_set result;
     std::vector inputTypes = {
         LogicalTypeID::STRING,
