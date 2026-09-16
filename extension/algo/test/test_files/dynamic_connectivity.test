@@ -1,0 +1,634 @@
+-DATASET CSV EMPTY
+
+--
+
+# Correctness tests for the dynamic connectivity index's neighbour provider.
+#
+# Fixture: the 11-node graph, with node offsets equal to node ids.
+#
+#   component A = {0,1,2,3,4,5,6,7}     component B = {8,9,10}
+#
+#     0 --e0-- 1 --e1-- 2 --e2-- 3          8 --e9--- 9
+#     |                          |          |         |
+#    e7                         e3         e11       e10
+#     |                          |          |         |
+#     +--------- 4 --------------+          +-- 10 ---+
+#                |
+#               e4   <-- the only bridge in component A
+#                |
+#                5 --e5-- 6 --e6-- 7
+#                |                 |
+#                +------ e8 -------+
+#
+
+-CASE DCNeighbourProviderReplacementExists
+-LOAD_DYNAMIC_EXTENSION algo
+-STATEMENT CREATE NODE TABLE Person(id INT64 PRIMARY KEY);
+---- ok
+-STATEMENT CREATE REL TABLE Knows(FROM Person TO Person, eid INT64);
+---- ok
+# UNWIND feeds every row through one CREATE operator, so offsets are assigned
+# in feed order. Do NOT replace this with a single multi-pattern CREATE
+# ((u0:Person{id:0}), (u1:Person{id:1}), ...): the planner reorders the
+# patterns within the clause and the offsets come out permuted. Every
+# connectivity argument below is a literal offset and depends on this.
+-STATEMENT UNWIND range(0, 10) AS i CREATE (:Person {id: i});
+---- ok
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 1}) CREATE (a)-[:Knows {eid: 0}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 1}), (b:Person {id: 2}) CREATE (a)-[:Knows {eid: 1}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 2}), (b:Person {id: 3}) CREATE (a)-[:Knows {eid: 2}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 3}), (b:Person {id: 4}) CREATE (a)-[:Knows {eid: 3}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 4}), (b:Person {id: 5}) CREATE (a)-[:Knows {eid: 4}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 5}), (b:Person {id: 6}) CREATE (a)-[:Knows {eid: 5}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 6}), (b:Person {id: 7}) CREATE (a)-[:Knows {eid: 6}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 4}) CREATE (a)-[:Knows {eid: 7}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 5}), (b:Person {id: 7}) CREATE (a)-[:Knows {eid: 8}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 8}), (b:Person {id: 9}) CREATE (a)-[:Knows {eid: 9}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 9}), (b:Person {id: 10}) CREATE (a)-[:Knows {eid: 10}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 8}), (b:Person {id: 10}) CREATE (a)-[:Knows {eid: 11}]->(b);
+---- ok
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_stree', 'stree') RETURN *;
+---- 1
+Dynamic connectivity index dc_stree has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_dtree', 'dtree') RETURN *;
+---- 1
+Dynamic connectivity index dc_dtree has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_stree_csr', 'stree_csr') RETURN *;
+---- 1
+Dynamic connectivity index dc_stree_csr has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_dtree_csr', 'dtree_csr') RETURN *;
+---- 1
+Dynamic connectivity index dc_dtree_csr has been created with 12 edges.
+# Baseline: A is one component, B another, and the two are disjoint.
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 8, 'dc_stree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 8, 'dc_dtree_csr') RETURN *;
+---- 1
+False
+# Delete tree edge e2 (2-3). It lies on the cycle 0-1-2-3-4-0, so a
+# replacement exists: 2 still reaches 3 via 2-1-0-4-3.
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 2 DELETE r;
+---- ok
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+# A deletion inside component A must leave component B untouched.
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+
+# The discriminating case for the provider. When searchReplacement runs, the
+# forest has already unlinked 4-5, so the old parent is neither parent nor
+# child of the old child and passes the isParent/isChild filter. If the scan
+# still returned the just-deleted relationship, findRoot would differ and the
+# deleted edge would be chosen as its own replacement: the split would never
+# happen and every False below would flip to True.
+-CASE DCNeighbourProviderBridgeHasNoReplacement
+-LOAD_DYNAMIC_EXTENSION algo
+-STATEMENT CREATE NODE TABLE Person(id INT64 PRIMARY KEY);
+---- ok
+-STATEMENT CREATE REL TABLE Knows(FROM Person TO Person, eid INT64);
+---- ok
+# UNWIND feeds every row through one CREATE operator, so offsets are assigned
+# in feed order. Do NOT replace this with a single multi-pattern CREATE
+# ((u0:Person{id:0}), (u1:Person{id:1}), ...): the planner reorders the
+# patterns within the clause and the offsets come out permuted. Every
+# connectivity argument below is a literal offset and depends on this.
+-STATEMENT UNWIND range(0, 10) AS i CREATE (:Person {id: i});
+---- ok
+-STATEMENT MATCH (p:Person) RETURN p.id, OFFSET(ID(p));
+---- 11
+0|0
+1|1
+2|2
+3|3
+4|4
+5|5
+6|6
+7|7
+8|8
+9|9
+10|10
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 1}) CREATE (a)-[:Knows {eid: 0}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 1}), (b:Person {id: 2}) CREATE (a)-[:Knows {eid: 1}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 2}), (b:Person {id: 3}) CREATE (a)-[:Knows {eid: 2}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 3}), (b:Person {id: 4}) CREATE (a)-[:Knows {eid: 3}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 4}), (b:Person {id: 5}) CREATE (a)-[:Knows {eid: 4}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 5}), (b:Person {id: 6}) CREATE (a)-[:Knows {eid: 5}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 6}), (b:Person {id: 7}) CREATE (a)-[:Knows {eid: 6}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 4}) CREATE (a)-[:Knows {eid: 7}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 5}), (b:Person {id: 7}) CREATE (a)-[:Knows {eid: 8}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 8}), (b:Person {id: 9}) CREATE (a)-[:Knows {eid: 9}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 9}), (b:Person {id: 10}) CREATE (a)-[:Knows {eid: 10}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 8}), (b:Person {id: 10}) CREATE (a)-[:Knows {eid: 11}]->(b);
+---- ok
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_stree', 'stree') RETURN *;
+---- 1
+Dynamic connectivity index dc_stree has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_dtree', 'dtree') RETURN *;
+---- 1
+Dynamic connectivity index dc_dtree has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_stree_csr', 'stree_csr') RETURN *;
+---- 1
+Dynamic connectivity index dc_stree_csr has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_dtree_csr', 'dtree_csr') RETURN *;
+---- 1
+Dynamic connectivity index dc_dtree_csr has been created with 12 edges.
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 DELETE r;
+---- ok
+# The component must split into {0,1,2,3,4} and {5,6,7}.
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_stree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_dtree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 3, 6, 'dc_stree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 3, 6, 'dc_dtree_csr') RETURN *;
+---- 1
+False
+# Both sides of the split must remain internally connected.
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 4, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 4, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+
+# Two tree edges removed in one transaction. Both are applied to the CSR during
+# DELETE, but the index is untouched until RelTable::commit drains
+# pendingRelDeletes. The provider therefore already reflects both removals
+# while the first is being settled, so neither deleted edge may be chosen as a
+# replacement for the other.
+-CASE DCNeighbourProviderMultipleDeletesInOneTransaction
+-LOAD_DYNAMIC_EXTENSION algo
+-STATEMENT CREATE NODE TABLE Person(id INT64 PRIMARY KEY);
+---- ok
+-STATEMENT CREATE REL TABLE Knows(FROM Person TO Person, eid INT64);
+---- ok
+# UNWIND feeds every row through one CREATE operator, so offsets are assigned
+# in feed order. Do NOT replace this with a single multi-pattern CREATE
+# ((u0:Person{id:0}), (u1:Person{id:1}), ...): the planner reorders the
+# patterns within the clause and the offsets come out permuted. Every
+# connectivity argument below is a literal offset and depends on this.
+-STATEMENT UNWIND range(0, 10) AS i CREATE (:Person {id: i});
+---- ok
+-STATEMENT MATCH (p:Person) RETURN p.id, OFFSET(ID(p));
+---- 11
+0|0
+1|1
+2|2
+3|3
+4|4
+5|5
+6|6
+7|7
+8|8
+9|9
+10|10
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 1}) CREATE (a)-[:Knows {eid: 0}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 1}), (b:Person {id: 2}) CREATE (a)-[:Knows {eid: 1}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 2}), (b:Person {id: 3}) CREATE (a)-[:Knows {eid: 2}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 3}), (b:Person {id: 4}) CREATE (a)-[:Knows {eid: 3}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 4}), (b:Person {id: 5}) CREATE (a)-[:Knows {eid: 4}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 5}), (b:Person {id: 6}) CREATE (a)-[:Knows {eid: 5}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 6}), (b:Person {id: 7}) CREATE (a)-[:Knows {eid: 6}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 4}) CREATE (a)-[:Knows {eid: 7}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 5}), (b:Person {id: 7}) CREATE (a)-[:Knows {eid: 8}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 8}), (b:Person {id: 9}) CREATE (a)-[:Knows {eid: 9}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 9}), (b:Person {id: 10}) CREATE (a)-[:Knows {eid: 10}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 8}), (b:Person {id: 10}) CREATE (a)-[:Knows {eid: 11}]->(b);
+---- ok
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_stree', 'stree') RETURN *;
+---- 1
+Dynamic connectivity index dc_stree has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_dtree', 'dtree') RETURN *;
+---- 1
+Dynamic connectivity index dc_dtree has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_stree_csr', 'stree_csr') RETURN *;
+---- 1
+Dynamic connectivity index dc_stree_csr has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_dtree_csr', 'dtree_csr') RETURN *;
+---- 1
+Dynamic connectivity index dc_dtree_csr has been created with 12 edges.
+-STATEMENT BEGIN TRANSACTION;
+---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 2 DELETE r;
+---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 DELETE r;
+---- ok
+-STATEMENT COMMIT;
+---- ok
+# e2 has a replacement, e4 does not: {0,1,2,3,4} stays whole, {5,6,7} splits off.
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 1, 4, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 1, 4, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 6, 'dc_stree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 6, 'dc_dtree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+
+# Before the checkpoint the deleted rows live in the committed in-memory delta;
+# after it they are in the persistent chunk group. The provider reads a
+# different storage state in each case, so exercise a replacement search on
+# either side of the boundary.
+-CASE DCNeighbourProviderDeleteAcrossCheckpoint
+-LOAD_DYNAMIC_EXTENSION algo
+-STATEMENT CREATE NODE TABLE Person(id INT64 PRIMARY KEY);
+---- ok
+-STATEMENT CREATE REL TABLE Knows(FROM Person TO Person, eid INT64);
+---- ok
+# UNWIND feeds every row through one CREATE operator, so offsets are assigned
+# in feed order. Do NOT replace this with a single multi-pattern CREATE
+# ((u0:Person{id:0}), (u1:Person{id:1}), ...): the planner reorders the
+# patterns within the clause and the offsets come out permuted. Every
+# connectivity argument below is a literal offset and depends on this.
+-STATEMENT UNWIND range(0, 10) AS i CREATE (:Person {id: i});
+---- ok
+-STATEMENT MATCH (p:Person) RETURN p.id, OFFSET(ID(p));
+---- 11
+0|0
+1|1
+2|2
+3|3
+4|4
+5|5
+6|6
+7|7
+8|8
+9|9
+10|10
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 1}) CREATE (a)-[:Knows {eid: 0}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 1}), (b:Person {id: 2}) CREATE (a)-[:Knows {eid: 1}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 2}), (b:Person {id: 3}) CREATE (a)-[:Knows {eid: 2}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 3}), (b:Person {id: 4}) CREATE (a)-[:Knows {eid: 3}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 4}), (b:Person {id: 5}) CREATE (a)-[:Knows {eid: 4}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 5}), (b:Person {id: 6}) CREATE (a)-[:Knows {eid: 5}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 6}), (b:Person {id: 7}) CREATE (a)-[:Knows {eid: 6}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 4}) CREATE (a)-[:Knows {eid: 7}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 5}), (b:Person {id: 7}) CREATE (a)-[:Knows {eid: 8}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 8}), (b:Person {id: 9}) CREATE (a)-[:Knows {eid: 9}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 9}), (b:Person {id: 10}) CREATE (a)-[:Knows {eid: 10}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 8}), (b:Person {id: 10}) CREATE (a)-[:Knows {eid: 11}]->(b);
+---- ok
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_stree', 'stree') RETURN *;
+---- 1
+Dynamic connectivity index dc_stree has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_stree_csr', 'stree_csr') RETURN *;
+---- 1
+Dynamic connectivity index dc_stree_csr has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_dtree_csr', 'dtree_csr') RETURN *;
+---- 1
+Dynamic connectivity index dc_dtree_csr has been created with 12 edges.
+# Pre-checkpoint deletion of tree edge e8 (5-7); 5-6-7 is the replacement.
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 8 DELETE r;
+---- ok
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CHECKPOINT;
+---- ok
+# The checkpoint alone must not change any answer.
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+# Post-checkpoint deletion of the bridge e4, now reading the persistent CSR.
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 DELETE r;
+---- ok
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_stree') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_stree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_dtree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 4, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 4, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 4, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+
+# RelTable::delete_ buffers the deletion into pendingRelDeletes and only
+# RelTable::commit drains it into the index, so an aborted transaction must
+# never reach the index at all. The committed delete that follows proves the
+# rollback assertion is not vacuous.
+-CASE DCNeighbourProviderRollbackPreservesConnectivity
+-LOAD_DYNAMIC_EXTENSION algo
+-STATEMENT CREATE NODE TABLE Person(id INT64 PRIMARY KEY);
+---- ok
+-STATEMENT CREATE REL TABLE Knows(FROM Person TO Person, eid INT64);
+---- ok
+# UNWIND feeds every row through one CREATE operator, so offsets are assigned
+# in feed order. Do NOT replace this with a single multi-pattern CREATE
+# ((u0:Person{id:0}), (u1:Person{id:1}), ...): the planner reorders the
+# patterns within the clause and the offsets come out permuted. Every
+# connectivity argument below is a literal offset and depends on this.
+-STATEMENT UNWIND range(0, 10) AS i CREATE (:Person {id: i});
+---- ok
+-STATEMENT MATCH (p:Person) RETURN p.id, OFFSET(ID(p));
+---- 11
+0|0
+1|1
+2|2
+3|3
+4|4
+5|5
+6|6
+7|7
+8|8
+9|9
+10|10
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 1}) CREATE (a)-[:Knows {eid: 0}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 1}), (b:Person {id: 2}) CREATE (a)-[:Knows {eid: 1}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 2}), (b:Person {id: 3}) CREATE (a)-[:Knows {eid: 2}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 3}), (b:Person {id: 4}) CREATE (a)-[:Knows {eid: 3}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 4}), (b:Person {id: 5}) CREATE (a)-[:Knows {eid: 4}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 5}), (b:Person {id: 6}) CREATE (a)-[:Knows {eid: 5}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 6}), (b:Person {id: 7}) CREATE (a)-[:Knows {eid: 6}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 4}) CREATE (a)-[:Knows {eid: 7}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 5}), (b:Person {id: 7}) CREATE (a)-[:Knows {eid: 8}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 8}), (b:Person {id: 9}) CREATE (a)-[:Knows {eid: 9}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 9}), (b:Person {id: 10}) CREATE (a)-[:Knows {eid: 10}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 8}), (b:Person {id: 10}) CREATE (a)-[:Knows {eid: 11}]->(b);
+---- ok
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_stree', 'stree') RETURN *;
+---- 1
+Dynamic connectivity index dc_stree has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_stree_csr', 'stree_csr') RETURN *;
+---- 1
+Dynamic connectivity index dc_stree_csr has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_dtree_csr', 'dtree_csr') RETURN *;
+---- 1
+Dynamic connectivity index dc_dtree_csr has been created with 12 edges.
+-STATEMENT BEGIN TRANSACTION;
+---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 DELETE r;
+---- ok
+-STATEMENT ROLLBACK;
+---- ok
+# The base table must still hold the bridge.
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 RETURN count(r);
+---- 1
+1
+# And so must every index.
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+# Now commit the same deletion: the answers must flip.
+-STATEMENT BEGIN TRANSACTION;
+---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 DELETE r;
+---- ok
+-STATEMENT COMMIT;
+---- ok
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_stree') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_stree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_dtree_csr') RETURN *;
+---- 1
+False
+
+# Parallel relationships are deliberately not covered yet.
+#
+# Two relationships over the same ordered pair need multiplicity-aware
+# maintenance: deleting one must leave the endpoints connected while the other
+# survives. The CSR-backed backends are expected to get this right for free
+# once the path is settled, because the provider re-reads the base CSR and the
+# surviving edge is returned as the replacement. stree/dtree cannot: their
+# insertEdge returns early when the endpoints are already tree-linked, so the
+# second edge is dropped rather than recorded as a non-tree edge.
+#
+# Add a DCNeighbourProviderParallelRelationships case once the implementation
+# is ready. Until then these tests keep one relationship per ordered pair, so
+# every expected value above is independent of multiplicity handling.
