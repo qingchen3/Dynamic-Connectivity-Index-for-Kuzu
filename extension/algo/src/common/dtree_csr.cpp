@@ -18,7 +18,7 @@
 namespace kuzu {
 namespace algo_extension {
 
-namespace dtree_internal {
+namespace dtreeCSR_internal {
     DNode_CSR* reroot(DNode_CSR * n_w) {
         if (n_w->parent != nullptr) {
             DNode_CSR* ch = n_w;
@@ -255,21 +255,18 @@ namespace dtree_internal {
     void delete_edge(
         int u, 
         int v, 
-        std::unordered_map<int, DNode_CSR*> &Dtree,
+        std::unordered_map<int, DNode_CSR*> &Dtree_CSR,
         const DynamicConnectivityIndex::NeighborProvider& getNeighbors) {
-        if(Dtree.find(u) == Dtree.end() || Dtree.find(v) == Dtree.end()) {
+        if(Dtree_CSR.find(u) == Dtree_CSR.end() || Dtree_CSR.find(v) == Dtree_CSR.end()) {
             return;
         }
 
-        const bool isParent =
-            (Dtree[u] == Dtree[v]->parent);
+        const bool isParent = (Dtree_CSR[u] == Dtree_CSR[v]->parent);
 
-        const bool isChild =
-            (Dtree[u]->children.find(Dtree[v]) !=
-                Dtree[u]->children.end());
+        const bool isChild = (Dtree_CSR[u]->parent == Dtree_CSR[v]);
 
         if (isParent || isChild) {
-            delete_te(Dtree[u], Dtree[v], Dtree, getNeighbors);
+            delete_te(Dtree_CSR[u], Dtree_CSR[v], Dtree_CSR, getNeighbors);
         }
     }
 
@@ -324,14 +321,14 @@ int DTree_CSR::toInternalKey(node_key_t key) {
 }
 
 void DTree_CSR::insertEdge(node_key_t u, node_key_t v) {
-    dtree_internal::insert_edge(toInternalKey(u), toInternalKey(v), nodes);
+    dtreeCSR_internal::insert_edge(toInternalKey(u), toInternalKey(v), nodes);
 }
 
 void DTree_CSR::deleteEdge(
     node_key_t u,
     node_key_t v,
     const DynamicConnectivityIndex::NeighborProvider& getNeighbors) {
-    dtree_internal::delete_edge(
+    dtreeCSR_internal::delete_edge(
         toInternalKey(u), 
         toInternalKey(v), 
         nodes,
@@ -344,7 +341,7 @@ bool DTree_CSR::connected(node_key_t u, node_key_t v) const {
     if (uIt == nodes.end() || vIt == nodes.end()) {
         return false;
     }
-    return dtree_internal::query_simple(uIt->second, vIt->second) != 0;
+    return dtreeCSR_internal::query_simple(uIt->second, vIt->second) != 0;
 }
 
 bool DTree_CSR::containsNode(node_key_t key) const {
