@@ -13,7 +13,7 @@ namespace algo_extension {
 
 using NeighborProvider = DynamicConnectivityIndex::NeighborProvider;
 
-namespace dtree_internal {
+namespace dtreeCSR_internal {
 
 struct DNode_CSR {
     explicit DNode_CSR(int key) : key{key} {}
@@ -79,7 +79,7 @@ private:
     static int toInternalKey(node_key_t key);
 
 private:
-    std::unordered_map<int, dtree_internal::DNode_CSR*> nodes;
+    std::unordered_map<int, dtreeCSR_internal::DNode_CSR*> nodes;
 };
 
 } // namespace algo_extension
