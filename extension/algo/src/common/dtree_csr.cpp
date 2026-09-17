@@ -289,12 +289,6 @@ namespace dtreeCSR_internal {
         return n_u->key == n_v->key;
     }
 
-    int query_simple(DNode_CSR* n_u, DNode_CSR* n_v) {
-        while (n_u->parent != nullptr) n_u = n_u->parent;
-        while (n_v->parent != nullptr) n_v = n_v->parent;
-        return n_u->key == n_v->key;
-    }
-
     void cal_size(std::unordered_map<int, DNode_CSR*> &Dtree) {
         int total_size = 0;
         for(auto it = Dtree.begin(); it != Dtree.end(); it++) {
