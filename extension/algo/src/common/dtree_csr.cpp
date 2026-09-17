@@ -335,7 +335,7 @@ bool DTree_CSR::connected(node_key_t u, node_key_t v) const {
     if (uIt == nodes.end() || vIt == nodes.end()) {
         return false;
     }
-    return dtreeCSR_internal::query_simple(uIt->second, vIt->second) != 0;
+    return dtreeCSR_internal::query(uIt->second, vIt->second) != 0;
 }
 
 bool DTree_CSR::containsNode(node_key_t key) const {
