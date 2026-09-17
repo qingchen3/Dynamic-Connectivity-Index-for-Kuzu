@@ -39,7 +39,6 @@ namespace dtree_internal {
         return n_w;
     }
 
-
     DNode* link(DNode* n_u, DNode* r_u, DNode* n_v) {
         n_v->parent = n_u;
         n_u->children.insert(n_v);
@@ -59,7 +58,6 @@ namespace dtree_internal {
         return r_u;
     }
 
-
     std::pair<DNode*, DNode*> unlink(DNode* n_v) {
         if (n_v->parent == nullptr) {
             return std::make_pair(n_v, n_v);
@@ -74,7 +72,6 @@ namespace dtree_internal {
         return std::make_pair(n_v, c);
     }
 
-
     std::pair<DNode*, int> find_root(DNode* node) {
         int dist = 0;
         while(node->parent != nullptr) {
@@ -83,7 +80,6 @@ namespace dtree_internal {
         }
         return std::make_pair(node, dist);
     }
-
 
     void insert_edge(int u, int v, std::unordered_map<int, DNode*> &Dtree) {
 
@@ -151,12 +147,10 @@ namespace dtree_internal {
         }
     }
 
-
     void delete_nte(DNode* n_u, DNode* n_v) {
         n_u->nte.erase(n_v);
         n_v->nte.erase(n_u);
     }
-
 
     std::pair<DNode*, DNode*> delete_te(DNode* n_u, DNode* n_v) {
         // determine parent and child
@@ -201,7 +195,6 @@ namespace dtree_internal {
         }
     }
 
-
     std::tuple<DNode*, DNode*, DNode*> BFS_select(DNode* r) {
         std::queue<DNode*> q;
         q.push(r);
@@ -242,7 +235,6 @@ namespace dtree_internal {
         return std::make_tuple(n_rs, n_rl, new_r);
     }
 
-
     void delete_edge(int u, int v, std::unordered_map<int, DNode*> &Dtree) {
         if(Dtree.find(u) == Dtree.end() || Dtree.find(v) == Dtree.end()) {
             return;
@@ -253,7 +245,6 @@ namespace dtree_internal {
             delete_te(Dtree[u], Dtree[v]);
         }
     }
-
 
     int query(DNode* n_u, DNode* n_v) {
         DNode* d_u = nullptr;
