@@ -286,7 +286,7 @@ namespace dtreeCSR_internal {
         }
         if (d_v != nullptr && d_v->size > n_v->size / 2) n_v = reroot(d_v);
 
-        return n_u->key == n_v->key;
+        return find_root(n_u).first->key == find_root(n_v).first->key;
     }
 
     void cal_size(std::unordered_map<int, DNode_CSR*> &Dtree) {

@@ -137,8 +137,6 @@ namespace dtree_internal {
         }
     }
 
-    //  insert_te return value discarded (DTree.cpp:99)  
-    // insert_te returns the (potentially new) root after rebalancing, but insert_edge ignores it. If the root changes, nothing tracks it. 
     DNode* insert_te(DNode* n_u, DNode* n_v, DNode* r_u, DNode* r_v) {
         if(r_v->size < r_u->size) {
             return link(n_u, r_u, reroot(n_v));
@@ -246,7 +244,7 @@ namespace dtree_internal {
         }
     }
 
-    int query(DNode* n_u, DNode* n_v) {
+    int query(DNode* n_u, DNode* n_v) { 
         DNode* d_u = nullptr;
 
         while (n_u->parent != nullptr) {
@@ -262,7 +260,7 @@ namespace dtree_internal {
         }
         if (d_v != nullptr && d_v->size > n_v->size / 2) n_v = reroot(d_v);
 
-        return n_u->key == n_v->key;
+        return find_root(n_u).first->key == find_root(n_v).first->key;
     }
 
     void cal_size(std::unordered_map<int, DNode*> &Dtree) {
@@ -305,7 +303,7 @@ bool DTree::connected(node_key_t u, node_key_t v) const {
     if (uIt == nodes.end() || vIt == nodes.end()) {
         return false;
     }
-    return dtree_internal::query_simple(uIt->second, vIt->second) != 0;
+    return dtree_internal::query(uIt->second, vIt->second) != 0;
 }
 
 bool DTree::containsNode(node_key_t key) const {
