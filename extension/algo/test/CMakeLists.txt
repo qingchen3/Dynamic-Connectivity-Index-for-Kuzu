@@ -12,4 +12,13 @@ if (${BUILD_EXTENSION_TESTS})
         ../src/common/dynamic_connectivity_index_factory.cpp
         ../src/index/native_dynamic_connectivity_index.cpp)
     target_include_directories(dynamic_connectivity_index_test PRIVATE ../src/include)
+
+    add_kuzu_test(dynamic_connectivity_random_test
+        dynamic_connectivity_random_test.cpp
+        ../src/common/stree.cpp
+        ../src/common/dtree.cpp
+        ../src/common/stree_csr.cpp
+        ../src/common/dtree_csr.cpp
+        ../src/common/dynamic_connectivity_index_factory.cpp)
+    target_include_directories(dynamic_connectivity_random_test PRIVATE ../src/include)
 endif ()
