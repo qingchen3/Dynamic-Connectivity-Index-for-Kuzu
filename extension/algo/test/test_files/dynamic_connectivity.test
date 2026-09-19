@@ -2,9 +2,12 @@
 
 --
 
-# Correctness tests for the dynamic connectivity index's neighbour provider.
+# Database integration tests for dynamic connectivity maintenance.
+# Run with IN_MEM_MODE=false and E2E_REWRITE_TESTS=OFF.
+# These cases do not test database reopen/recovery or parallel relationships.
 #
-# Fixture: the 11-node graph, with node offsets equal to node ids.
+# First five cases: the 11-node graph, with checked node offsets.
+# The final insertion case uses a separate four-node fixture.
 #
 #   component A = {0,1,2,3,4,5,6,7}     component B = {8,9,10}
 #
@@ -34,6 +37,19 @@
 # connectivity argument below is a literal offset and depends on this.
 -STATEMENT UNWIND range(0, 10) AS i CREATE (:Person {id: i});
 ---- ok
+-STATEMENT MATCH (p:Person) RETURN p.id, OFFSET(ID(p));
+---- 11
+0|0
+1|1
+2|2
+3|3
+4|4
+5|5
+6|6
+7|7
+8|8
+9|9
+10|10
 -STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 1}) CREATE (a)-[:Knows {eid: 0}]->(b);
 ---- ok
 -STATEMENT MATCH (a:Person {id: 1}), (b:Person {id: 2}) CREATE (a)-[:Knows {eid: 1}]->(b);
@@ -89,10 +105,14 @@ False
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 8, 'dc_dtree_csr') RETURN *;
 ---- 1
 False
-# Delete tree edge e2 (2-3). It lies on the cycle 0-1-2-3-4-0, so a
-# replacement exists: 2 still reaches 3 via 2-1-0-4-3.
+# Delete e2 (2-3). An alternative path remains: 2-1-0-4-3.
+# Tree-edge classification depends on the backend forest; these assertions
+# verify connectivity, not which replacement-search branch was executed.
 -STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 2 DELETE r;
 ---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 2 RETURN count(r);
+---- 1
+0
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree') RETURN *;
 ---- 1
 True
@@ -195,6 +215,9 @@ True
 True
 -STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 DELETE r;
 ---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 RETURN count(r);
+---- 1
+0
 # The component must split into {0,1,2,3,4} and {5,6,7}.
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
 ---- 1
@@ -240,11 +263,8 @@ True
 ---- 1
 True
 
-# Two tree edges removed in one transaction. Both are applied to the CSR during
-# DELETE, but the index is untouched until RelTable::commit drains
-# pendingRelDeletes. The provider therefore already reflects both removals
-# while the first is being settled, so neither deleted edge may be chosen as a
-# replacement for the other.
+# Delete two edges in one transaction. The post-commit checks require
+# the base graph and all four indexes to reflect both deletions.
 -CASE DCNeighbourProviderMultipleDeletesInOneTransaction
 -LOAD_DYNAMIC_EXTENSION algo
 -STATEMENT CREATE NODE TABLE Person(id INT64 PRIMARY KEY);
@@ -311,11 +331,26 @@ Dynamic connectivity index dc_dtree_csr has been created with 12 edges.
 ---- ok
 -STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 2 DELETE r;
 ---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 2 RETURN count(r);
+---- 1
+0
 -STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 DELETE r;
 ---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 RETURN count(r);
+---- 1
+0
 -STATEMENT COMMIT;
 ---- ok
-# e2 has a replacement, e4 does not: {0,1,2,3,4} stays whole, {5,6,7} splits off.
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 2 RETURN count(r);
+---- 1
+0
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 RETURN count(r);
+---- 1
+0
+-STATEMENT MATCH ()-[r:Knows]->() RETURN count(r);
+---- 1
+10
+# An alternative path remains for e2, but not for e4: {0,1,2,3,4} stays whole, {5,6,7} splits off.
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree') RETURN *;
 ---- 1
 True
@@ -365,10 +400,9 @@ True
 ---- 1
 True
 
-# Before the checkpoint the deleted rows live in the committed in-memory delta;
-# after it they are in the persistent chunk group. The provider reads a
-# different storage state in each case, so exercise a replacement search on
-# either side of the boundary.
+# Check deletion before and after an explicit checkpoint on a disk-backed
+# database. Checkpoint must preserve the logical graph. These assertions do
+# not by themselves establish physical scan coverage or restart recovery.
 -CASE DCNeighbourProviderDeleteAcrossCheckpoint
 -LOAD_DYNAMIC_EXTENSION algo
 -STATEMENT CREATE NODE TABLE Person(id INT64 PRIMARY KEY);
@@ -425,13 +459,22 @@ Dynamic connectivity index dc_stree has been created with 12 edges.
 -STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_stree_csr', 'stree_csr') RETURN *;
 ---- 1
 Dynamic connectivity index dc_stree_csr has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_dtree', 'dtree') RETURN *;
+---- 1
+Dynamic connectivity index dc_dtree has been created with 12 edges.
 -STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_dtree_csr', 'dtree_csr') RETURN *;
 ---- 1
 Dynamic connectivity index dc_dtree_csr has been created with 12 edges.
-# Pre-checkpoint deletion of tree edge e8 (5-7); 5-6-7 is the replacement.
+# Delete e8 (5-7) before checkpoint; the alternative path 5-6-7 remains.
 -STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 8 DELETE r;
 ---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 8 RETURN count(r);
+---- 1
+0
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree') RETURN *;
 ---- 1
 True
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
@@ -440,10 +483,19 @@ True
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree_csr') RETURN *;
 ---- 1
 True
+-STATEMENT MATCH ()-[r:Knows]->() RETURN count(r);
+---- 1
+11
 -STATEMENT CHECKPOINT;
 ---- ok
+-STATEMENT MATCH ()-[r:Knows]->() RETURN count(r);
+---- 1
+11
 # The checkpoint alone must not change any answer.
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree') RETURN *;
 ---- 1
 True
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
@@ -455,16 +507,25 @@ True
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree') RETURN *;
 ---- 1
 True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree') RETURN *;
+---- 1
+True
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree_csr') RETURN *;
 ---- 1
 True
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree_csr') RETURN *;
 ---- 1
 True
-# Post-checkpoint deletion of the bridge e4, now reading the persistent CSR.
+# Delete bridge e4 after checkpoint; the two sides must become disconnected.
 -STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 DELETE r;
 ---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 RETURN count(r);
+---- 1
+0
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree') RETURN *;
 ---- 1
 False
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
@@ -476,6 +537,9 @@ False
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_stree') RETURN *;
 ---- 1
 False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_dtree') RETURN *;
+---- 1
+False
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_stree_csr') RETURN *;
 ---- 1
 False
@@ -483,6 +547,9 @@ False
 ---- 1
 False
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 4, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 4, 'dc_dtree') RETURN *;
 ---- 1
 True
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 4, 'dc_stree_csr') RETURN *;
@@ -494,6 +561,9 @@ True
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree') RETURN *;
 ---- 1
 True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree') RETURN *;
+---- 1
+True
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
 ---- 1
 True
@@ -501,10 +571,8 @@ True
 ---- 1
 True
 
-# RelTable::delete_ buffers the deletion into pendingRelDeletes and only
-# RelTable::commit drains it into the index, so an aborted transaction must
-# never reach the index at all. The committed delete that follows proves the
-# rollback assertion is not vacuous.
+# Rollback must preserve the base edge and all four index answers.
+# Committing the same deletion must then change the connectivity answers.
 -CASE DCNeighbourProviderRollbackPreservesConnectivity
 -LOAD_DYNAMIC_EXTENSION algo
 -STATEMENT CREATE NODE TABLE Person(id INT64 PRIMARY KEY);
@@ -561,6 +629,9 @@ Dynamic connectivity index dc_stree has been created with 12 edges.
 -STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_stree_csr', 'stree_csr') RETURN *;
 ---- 1
 Dynamic connectivity index dc_stree_csr has been created with 12 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_dtree', 'dtree') RETURN *;
+---- 1
+Dynamic connectivity index dc_dtree has been created with 12 edges.
 -STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_dtree_csr', 'dtree_csr') RETURN *;
 ---- 1
 Dynamic connectivity index dc_dtree_csr has been created with 12 edges.
@@ -568,14 +639,23 @@ Dynamic connectivity index dc_dtree_csr has been created with 12 edges.
 ---- ok
 -STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 DELETE r;
 ---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 RETURN count(r);
+---- 1
+0
 -STATEMENT ROLLBACK;
 ---- ok
+-STATEMENT MATCH ()-[r:Knows]->() RETURN count(r);
+---- 1
+12
 # The base table must still hold the bridge.
 -STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 RETURN count(r);
 ---- 1
 1
 # And so must every index.
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree') RETURN *;
 ---- 1
 True
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
@@ -585,6 +665,9 @@ True
 ---- 1
 True
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_dtree') RETURN *;
 ---- 1
 True
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_stree_csr') RETURN *;
@@ -598,9 +681,21 @@ True
 ---- ok
 -STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 DELETE r;
 ---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 RETURN count(r);
+---- 1
+0
 -STATEMENT COMMIT;
 ---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 4 RETURN count(r);
+---- 1
+0
+-STATEMENT MATCH ()-[r:Knows]->() RETURN count(r);
+---- 1
+11
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree') RETURN *;
 ---- 1
 False
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
@@ -612,6 +707,9 @@ False
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_stree') RETURN *;
 ---- 1
 False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_dtree') RETURN *;
+---- 1
+False
 -STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 5, 'dc_stree_csr') RETURN *;
 ---- 1
 False
@@ -619,16 +717,127 @@ False
 ---- 1
 False
 
-# Parallel relationships are deliberately not covered yet.
-#
-# Two relationships over the same ordered pair need multiplicity-aware
-# maintenance: deleting one must leave the endpoints connected while the other
-# survives. The CSR-backed backends are expected to get this right for free
-# once the path is settled, because the provider re-reads the base CSR and the
-# surviving edge is returned as the replacement. stree/dtree cannot: their
-# insertEdge returns early when the endpoints are already tree-linked, so the
-# second edge is dropped rather than recorded as a non-tree edge.
-#
-# Add a DCNeighbourProviderParallelRelationships case once the implementation
-# is ready. Until then these tests keep one relationship per ordered pair, so
-# every expected value above is independent of multiplicity handling.
+# Parallel relationships require a separate multiplicity test.
+# No backend-specific guarantee about parallel edges is asserted here.
+
+-CASE DCInsertAfterIndexCreationCommitAndRollback
+-LOAD_DYNAMIC_EXTENSION algo
+-STATEMENT CREATE NODE TABLE Person(id INT64 PRIMARY KEY);
+---- ok
+-STATEMENT CREATE REL TABLE Knows(FROM Person TO Person, eid INT64);
+---- ok
+-STATEMENT CREATE (:Person {id: 0});
+---- ok
+-STATEMENT CREATE (:Person {id: 1});
+---- ok
+-STATEMENT CREATE (:Person {id: 2});
+---- ok
+-STATEMENT CREATE (:Person {id: 3});
+---- ok
+-STATEMENT MATCH (p:Person) RETURN p.id, OFFSET(ID(p));
+---- 4
+0|0
+1|1
+2|2
+3|3
+
+# Initial components: {0,1} and {2,3}.
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 1}) CREATE (a)-[:Knows {eid: 0}]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 2}), (b:Person {id: 3}) CREATE (a)-[:Knows {eid: 1}]->(b);
+---- ok
+-STATEMENT MATCH ()-[r:Knows]->() RETURN count(r);
+---- 1
+2
+
+# Build indexes before inserting the connecting edge.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_dtree', 'dtree') RETURN *;
+---- 1
+Dynamic connectivity index dc_dtree has been created with 2 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_dtree_csr', 'dtree_csr') RETURN *;
+---- 1
+Dynamic connectivity index dc_dtree_csr has been created with 2 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_stree', 'stree') RETURN *;
+---- 1
+Dynamic connectivity index dc_stree has been created with 2 edges.
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc_stree_csr', 'stree_csr') RETURN *;
+---- 1
+Dynamic connectivity index dc_stree_csr has been created with 2 edges.
+
+# Baseline: all indexes and the base graph report disconnected.
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_dtree') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_dtree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_stree') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_stree_csr') RETURN *;
+---- 1
+False
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 3}) MATCH (a)-[:Knows* SHORTEST 1..3]-(b) RETURN count(*) > 0;
+---- 1
+False
+
+# Confirm the inserted edge is visible to this transaction, then abort it.
+-STATEMENT BEGIN TRANSACTION;
+---- ok
+-STATEMENT MATCH (a:Person {id: 1}), (b:Person {id: 2}) CREATE (a)-[:Knows {eid: 2}]->(b);
+---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 2 RETURN count(r);
+---- 1
+1
+-STATEMENT ROLLBACK;
+---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 2 RETURN count(r);
+---- 1
+0
+-STATEMENT MATCH ()-[r:Knows]->() RETURN count(r);
+---- 1
+2
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_dtree') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_dtree_csr') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_stree') RETURN *;
+---- 1
+False
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_stree_csr') RETURN *;
+---- 1
+False
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 3}) MATCH (a)-[:Knows* SHORTEST 1..3]-(b) RETURN count(*) > 0;
+---- 1
+False
+
+# Commit the same insertion; index maintenance must connect 0 and 3.
+-STATEMENT BEGIN TRANSACTION;
+---- ok
+-STATEMENT MATCH (a:Person {id: 1}), (b:Person {id: 2}) CREATE (a)-[:Knows {eid: 2}]->(b);
+---- ok
+-STATEMENT COMMIT;
+---- ok
+-STATEMENT MATCH ()-[r:Knows]->() WHERE r.eid = 2 RETURN count(r);
+---- 1
+1
+-STATEMENT MATCH ()-[r:Knows]->() RETURN count(r);
+---- 1
+3
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_dtree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_dtree_csr') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_stree') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 3, 'dc_stree_csr') RETURN *;
+---- 1
+True
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 3}) MATCH (a)-[:Knows* SHORTEST 1..3]-(b) RETURN count(*) > 0;
+---- 1
+True
