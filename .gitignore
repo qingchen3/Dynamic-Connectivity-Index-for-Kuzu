@@ -89,3 +89,4 @@ dataset/ldbc-1/csv
 # additional folders and files
 .scratch/*
 *.log
+test-results/
