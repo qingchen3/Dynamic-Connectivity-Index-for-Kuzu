@@ -21,4 +21,16 @@ if (${BUILD_EXTENSION_TESTS})
         ../src/common/dtree_csr.cpp
         ../src/common/dynamic_connectivity_index_factory.cpp)
     target_include_directories(dynamic_connectivity_random_test PRIVATE ../src/include)
+
+    # Not a test: replays an Imp_bench_dyn workload and reports timings, so it is
+    # a plain executable rather than an add_kuzu_test target.
+    add_executable(dynamic_connectivity_workload_bench
+        dynamic_connectivity_workload_bench.cpp
+        ../src/common/stree.cpp
+        ../src/common/dtree.cpp
+        ../src/common/stree_csr.cpp
+        ../src/common/dtree_csr.cpp
+        ../src/common/dynamic_connectivity_index_factory.cpp)
+    target_include_directories(dynamic_connectivity_workload_bench PRIVATE ../src/include)
+    target_link_libraries(dynamic_connectivity_workload_bench PRIVATE kuzu)
 endif ()
