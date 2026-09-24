@@ -2,6 +2,9 @@
 """Generate and optionally run standard Kuzu .test cases from an update trace.
 
 This is a correctness runner, not a performance benchmark. Requires Python 3.9+.
+Updates accept 'ins u v [timestamp]' and 'del u v [timestamp]'.
+Optional integer timestamps are validated but replay follows file order,
+without timestamp-based sorting, delays, or automatic edge expiration.
 """
 import argparse
 import hashlib
@@ -16,6 +19,7 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict, deque
 
 METHODS = ("dtree", "dtree_csr", "stree", "stree_csr")
+WORKLOAD_PATH = Path(__file__).with_name("test1745.workload")
 
 
 def read_workload(path):
@@ -31,9 +35,20 @@ def read_workload(path):
             operations.append((line_no, kind, fields[1], None))
             counts["query_markers"] += 1
             continue
-        if kind not in ("ins", "del") or len(fields) != 3:
-            raise ValueError(f"line {line_no}: expected 'ins u v', 'del u v', or 'query label': {raw!r}")
-        u, v = map(int, fields[1:])
+        if kind not in ("ins", "del") or len(fields) not in (3, 4):
+            raise ValueError(
+                f"line {line_no}: expected 'ins u v [timestamp]', "
+                f"'del u v [timestamp]', or 'query label': {raw!r}")
+        try:
+            u, v = map(int, fields[1:3])
+        except ValueError as error:
+            raise ValueError(f"line {line_no}: vertex IDs must be integers: {raw!r}") from error
+        if len(fields) == 4:
+            try:
+                int(fields[3])
+            except ValueError as error:
+                raise ValueError(f"line {line_no}: timestamp must be an integer: {raw!r}") from error
+            # Metadata only: retain input order and use explicit ins/del events.
         if u < 0 or v < 0 or u == v:
             raise ValueError(f"line {line_no}: use distinct non-negative vertex IDs")
         edge = tuple(sorted((u, v)))
@@ -185,7 +200,7 @@ def generate(path, method, operations, vertices, seed, samples, marker_samples, 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, default=Path.cwd())
-    parser.add_argument("--workload", type=Path, default=Path(__file__).with_name("test1745.workload"))
+    parser.add_argument("--workload", type=Path, default=WORKLOAD_PATH)
     parser.add_argument("--build", default="build/relwithdebinfo")
     parser.add_argument("--method", choices=("all",) + METHODS, default="all")
     parser.add_argument("--seed", type=int, default=20260921)
@@ -214,6 +229,7 @@ def main():
                   vertices=len(vertices), counts=counts, seed=args.seed, samples=args.samples,
                   marker_samples=args.marker_samples, checkpoint_every=args.checkpoint_every,
                   query_marker_policy="named correctness-check points; original query semantics unconfirmed",
+                  timestamp_policy="optional integer metadata; replay in file order without time-based expiration",
                   mode="correctness_only", runs=[])
     report_path = output / "summary.json"
     try:
