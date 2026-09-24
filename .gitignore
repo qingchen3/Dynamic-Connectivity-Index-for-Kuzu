@@ -90,3 +90,4 @@ dataset/ldbc-1/csv
 .scratch/*
 *.log
 test-results/
+test-workloads/
