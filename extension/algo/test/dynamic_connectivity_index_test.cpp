@@ -1,6 +1,7 @@
 #include "common/dynamic_connectivity_index_factory.h"
 #include "common/stree_index.h"
 #include "common/dtree_index.h"
+#include "common/delete_diagnostics.h"
 
 #include "index/native_dynamic_connectivity_index.h"
 
@@ -147,41 +148,126 @@ TEST(DynamicConnectivityIndexFactoryTest, ThrowsOnUnknownMethodName) {
     EXPECT_THROW(createDynamicConnectivityIndex("unknown"), std::runtime_error);
 }
 
+TEST(DynamicConnectivityIndexTest, STreeIndexDeleteDiagnostics) {
+    STreeIndex index;
 
+    EXPECT_TRUE(index.supportsDeleteDiagnostics());
 
-namespace {
+    // Deleting a missing edge should be reported as a no-op deletion.
+    index.deleteEdge(100, 200);
+    {
+        auto diag = index.lastDeleteDiagnostics();
+        EXPECT_EQ(diag.edgeKind, DeleteDiagnostics::EdgeKind::NONE);
+        EXPECT_FALSE(diag.replacementSearchTriggered);
+        EXPECT_FALSE(diag.replacementFound);
+        EXPECT_EQ(diag.replacementCandidatesScanned, 0u);
+    }
 
-constexpr kuzu::common::table_id_t TEST_NODE_TABLE_ID = 1;
-constexpr kuzu::common::table_id_t TEST_REL_TABLE_ID = 2;
+    // Deleting a tree edge with no replacement available.
+    index.insertEdge(1, 2);
+    index.deleteEdge(1, 2);
+    {
+        auto diag = index.lastDeleteDiagnostics();
+        EXPECT_EQ(diag.edgeKind, DeleteDiagnostics::EdgeKind::TREE);
+        EXPECT_TRUE(diag.replacementSearchTriggered);
+        EXPECT_FALSE(diag.replacementFound);
+        EXPECT_EQ(diag.replacementCandidatesScanned, 0u);
+        EXPECT_FALSE(index.connected(1, 2));
+    }
 
-std::unique_ptr<kuzu::algo_extension::NativeDynamicConnectivityIndex>
-createNativeIndex(const std::string& indexName, const std::string& method) {
-    kuzu::storage::IndexInfo indexInfo{
-        indexName,
-        "DYNAMIC_CONNECTIVITY",
-        TEST_NODE_TABLE_ID,
-        std::vector<kuzu::common::column_id_t>{},
-        std::vector<kuzu::common::PhysicalTypeID>{},
-        false /* isPrimary */,
-        false /* isBuiltin */};
+    // Deleting a non-tree edge should not trigger replacement search.
+    index.insertEdge(1, 2);
+    index.insertEdge(2, 3);
+    index.insertEdge(1, 3);
+    index.deleteEdge(1, 3);
+    {
+        auto diag = index.lastDeleteDiagnostics();
+        EXPECT_EQ(diag.edgeKind, DeleteDiagnostics::EdgeKind::NON_TREE);
+        EXPECT_FALSE(diag.replacementSearchTriggered);
+        EXPECT_FALSE(diag.replacementFound);
+        EXPECT_EQ(diag.replacementCandidatesScanned, 0u);
+    }
 
-    return std::make_unique<
-        kuzu::algo_extension::NativeDynamicConnectivityIndex>(
-        std::move(indexInfo),
-        std::make_unique<kuzu::storage::IndexStorageInfo>(),
-        TEST_REL_TABLE_ID,
-        method);
+    // Re-add the non-tree edge, then delete a tree edge so replacement search
+    // reconnects the component through the non-tree edge.
+    index.insertEdge(1, 3);
+    index.deleteEdge(2, 3);
+    {
+        auto diag = index.lastDeleteDiagnostics();
+        EXPECT_EQ(diag.edgeKind, DeleteDiagnostics::EdgeKind::TREE);
+        EXPECT_TRUE(diag.replacementSearchTriggered);
+        EXPECT_TRUE(diag.replacementFound);
+        EXPECT_GE(diag.replacementCandidatesScanned, 1u);
+        EXPECT_TRUE(index.connected(2, 3));
+    }
 }
 
-kuzu::common::nodeID_t makeNodeID(
-    kuzu::common::offset_t offset,
-    kuzu::common::table_id_t tableID) {
-    kuzu::common::nodeID_t nodeID;
-    nodeID.offset = offset;
-    nodeID.tableID = tableID;
-    return nodeID;
+TEST(DynamicConnectivityIndexTest, DTreeIndexDeleteDiagnostics) {
+    {
+        DTreeIndex index;
+
+        EXPECT_TRUE(index.supportsDeleteDiagnostics());
+
+        // Deleting a missing edge should be reported as a no-op deletion.
+        index.deleteEdge(100, 200);
+        auto diag = index.lastDeleteDiagnostics();
+
+        EXPECT_EQ(diag.edgeKind, DeleteDiagnostics::EdgeKind::NONE);
+        EXPECT_FALSE(diag.replacementSearchTriggered);
+        EXPECT_FALSE(diag.replacementFound);
+        EXPECT_EQ(diag.replacementCandidatesScanned, 0u);
+    }
+
+    {
+        DTreeIndex index;
+
+        // Deleting a tree edge with no replacement available.
+        index.insertEdge(1, 2);
+        index.deleteEdge(1, 2);
+
+        auto diag = index.lastDeleteDiagnostics();
+
+        EXPECT_EQ(diag.edgeKind, DeleteDiagnostics::EdgeKind::TREE);
+        EXPECT_TRUE(diag.replacementSearchTriggered);
+        EXPECT_FALSE(diag.replacementFound);
+        EXPECT_EQ(diag.replacementCandidatesScanned, 0u);
+        EXPECT_FALSE(index.connected(1, 2));
+    }
+
+    {
+        DTreeIndex index;
+
+        // In this insertion order, DTree records a non-tree connection that can
+        // be deleted through edge (1, 2).
+        index.insertEdge(1, 2);
+        index.insertEdge(2, 3);
+        index.insertEdge(1, 3);
+        index.deleteEdge(1, 2);
+
+        auto diag = index.lastDeleteDiagnostics();
+
+        EXPECT_EQ(diag.edgeKind, DeleteDiagnostics::EdgeKind::NON_TREE);
+        EXPECT_FALSE(diag.replacementSearchTriggered);
+        EXPECT_FALSE(diag.replacementFound);
+        EXPECT_EQ(diag.replacementCandidatesScanned, 0u);
+    }
+
+    {
+        DTreeIndex index;
+
+        // Delete a tree edge so replacement search reconnects the component
+        // through an existing non-tree edge.
+        index.insertEdge(1, 2);
+        index.insertEdge(2, 3);
+        index.insertEdge(1, 3);
+        index.deleteEdge(1, 3);
+
+        auto diag = index.lastDeleteDiagnostics();
+
+        EXPECT_EQ(diag.edgeKind, DeleteDiagnostics::EdgeKind::TREE);
+        EXPECT_TRUE(diag.replacementSearchTriggered);
+        EXPECT_TRUE(diag.replacementFound);
+        EXPECT_GE(diag.replacementCandidatesScanned, 1u);
+        EXPECT_TRUE(index.connected(1, 3));
+    }
 }
-
-} // namespace
-
-

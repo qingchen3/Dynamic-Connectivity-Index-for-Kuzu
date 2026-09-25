@@ -33,4 +33,10 @@ if (${BUILD_EXTENSION_TESTS})
         ../src/common/dynamic_connectivity_index_factory.cpp)
     target_include_directories(dynamic_connectivity_workload_bench PRIVATE ../src/include)
     target_link_libraries(dynamic_connectivity_workload_bench PRIVATE kuzu)
+    add_executable(dynamic_connectivity_benchmark
+        dynamic_connectivity_benchmark.cpp
+        ../src/common/stree.cpp
+        ../src/common/dtree.cpp
+        ../src/common/dynamic_connectivity_index_factory.cpp)
+    target_include_directories(dynamic_connectivity_benchmark PRIVATE ../src/include)
 endif ()

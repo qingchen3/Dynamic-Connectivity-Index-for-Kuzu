@@ -91,7 +91,6 @@ namespace dtree_internal {
             Dtree[v] = new DNode(v);    
         }
 
-
         std::pair<DNode*, int> res_u = find_root(Dtree[u]);
         DNode* r_u = res_u.first;
         int dist_u = res_u.second;
@@ -150,7 +149,7 @@ namespace dtree_internal {
         n_v->nte.erase(n_u);
     }
 
-    std::pair<DNode*, DNode*> delete_te(DNode* n_u, DNode* n_v) {
+    std::pair<DNode*, DNode*> delete_te(DNode* n_u, DNode* n_v, DeleteDiagnostics& diag) {
         // determine parent and child
         DNode* ch = nullptr;
         if(n_u->parent == n_v) {
@@ -161,6 +160,9 @@ namespace dtree_internal {
             // edge does not exist as a tree edge
             return std::make_pair(n_u, n_v);
         }
+
+        diag.edgeKind = DeleteDiagnostics::EdgeKind::TREE;
+        diag.replacementSearchTriggered = true;
 
         DNode* root = nullptr;
         std::pair<DNode*, DNode*>res = unlink(ch);
@@ -178,7 +180,7 @@ namespace dtree_internal {
             r_l = ch;
         }
 
-        std::tuple<DNode*, DNode*, DNode*> res_bfs_sel = BFS_select(r_s);
+        std::tuple<DNode*, DNode*, DNode*> res_bfs_sel = BFS_select(r_s, diag);
         DNode* n_rs = std::get<0>(res_bfs_sel);
         DNode* n_rl = std::get<1>(res_bfs_sel);
         DNode* new_r = std::get<2>(res_bfs_sel);
@@ -187,13 +189,14 @@ namespace dtree_internal {
             if(new_r != nullptr) r_s = reroot(new_r);   
             return std::make_pair(r_s, r_l);
         } else {
+            diag.replacementFound = true;
             n_rs->nte.erase(n_rl);
             n_rl->nte.erase(n_rs);
             return std::make_pair(insert_te(n_rs, n_rl, r_s, r_l), nullptr);
         }
     }
 
-    std::tuple<DNode*, DNode*, DNode*> BFS_select(DNode* r) {
+    std::tuple<DNode*, DNode*, DNode*> BFS_select(DNode* r, DeleteDiagnostics& diag) {
         std::queue<DNode*> q;
         q.push(r);
 
@@ -214,6 +217,7 @@ namespace dtree_internal {
 
                 if (!node->nte.empty()) {
                     for (auto it : node->nte) {
+                        diag.replacementCandidatesScanned++;
                         std::pair <DNode*, int> res_find_root = find_root(it);
                         DNode* rt = res_find_root.first;
                         int dist = res_find_root.second;
@@ -233,14 +237,15 @@ namespace dtree_internal {
         return std::make_tuple(n_rs, n_rl, new_r);
     }
 
-    void delete_edge(int u, int v, std::unordered_map<int, DNode*> &Dtree) {
+    void delete_edge(int u, int v, std::unordered_map<int, DNode*> &Dtree, DeleteDiagnostics& diag) {
         if(Dtree.find(u) == Dtree.end() || Dtree.find(v) == Dtree.end()) {
             return;
         }
         if(Dtree[v]->nte.find(Dtree[u]) != Dtree[v]->nte.end() || Dtree[u]->nte.find(Dtree[v]) != Dtree[u]->nte.end()) {
+            diag.edgeKind = DeleteDiagnostics::EdgeKind::NON_TREE;
             delete_nte(Dtree[u], Dtree[v]);
         } else {
-            delete_te(Dtree[u], Dtree[v]);
+            delete_te(Dtree[u], Dtree[v], diag);
         }
     }
 
@@ -294,7 +299,8 @@ void DTree::insertEdge(node_key_t u, node_key_t v) {
 }
 
 void DTree::deleteEdge(node_key_t u, node_key_t v) {
-    dtree_internal::delete_edge(toInternalKey(u), toInternalKey(v), nodes);
+    lastDeleteDiagnostics_ = DeleteDiagnostics{};
+    dtree_internal::delete_edge(toInternalKey(u), toInternalKey(v), nodes, lastDeleteDiagnostics_);
 }
 
 bool DTree::connected(node_key_t u, node_key_t v) const {

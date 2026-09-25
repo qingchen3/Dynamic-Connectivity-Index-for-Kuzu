@@ -5,6 +5,8 @@
 #include <functional>
 #include <vector>
 
+#include "common/delete_diagnostics.h"
+
 namespace kuzu {
 namespace algo_extension {
 
@@ -30,6 +32,14 @@ public:
     virtual uint64_t getNumNodes() const = 0;
 
     virtual std::string getName() const = 0;
+
+    // Whether this index instruments deletions and exposes per-deletion
+    // diagnostics via lastDeleteDiagnostics().
+    virtual bool supportsDeleteDiagnostics() const { return false; }
+
+    // Diagnostics describing the most recent deleteEdge() call. Only meaningful
+    // when supportsDeleteDiagnostics() returns true.
+    virtual DeleteDiagnostics lastDeleteDiagnostics() const { return {}; }
 };
 
 } // namespace algo_extension
