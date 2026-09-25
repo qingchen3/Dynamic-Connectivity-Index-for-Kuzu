@@ -1,0 +1,3547 @@
+mode set as csv
+stats set as off
+
+============================================================
+[CSR_TRACE_QUERY 0]
+
+                LOAD EXTENSION
+                '/Users/qingchen/projects/Dynamic-Connectivity-Index-for-Kuzu/extension/algo/build/libalgo.kuzu_extension';
+            
+============================================================
+Pipelines Finished: 1/0
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aresult
+Extension: /Users/qingchen/projects/Dynamic-Connectivity-Index-for-Kuzu/extension/algo/build/libalgo.kuzu_extension has been loaded.
+
+============================================================
+[CSR_TRACE_QUERY 1]
+
+                CREATE NODE TABLE Person(
+                    id INT64,
+                    PRIMARY KEY(id)
+                );
+            
+============================================================
+Pipelines Finished: 1/0
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aresult
+Table Person has been created.
+
+============================================================
+[CSR_TRACE_QUERY 2]
+
+                CREATE REL TABLE Knows(
+                    FROM Person TO Person,
+                    eid INT64
+                );
+            
+============================================================
+Pipelines Finished: 1/0
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aresult
+Table Knows has been created.
+
+============================================================
+[CSR_TRACE_QUERY 3]
+CREATE (:Person {id: 0});
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 4]
+CREATE (:Person {id: 1});
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 5]
+CREATE (:Person {id: 2});
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 6]
+CREATE (:Person {id: 3});
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 7]
+CREATE (:Person {id: 4});
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 8]
+CREATE (:Person {id: 5});
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 9]
+CREATE (:Person {id: 6});
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 10]
+CREATE (:Person {id: 7});
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 11]
+CREATE (:Person {id: 8});
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 12]
+CREATE (:Person {id: 9});
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 13]
+CREATE (:Person {id: 10});
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 14]
+
+            MATCH (n:Person)
+            RETURN n.id, ID(n)
+            ORDER BY n.id;
+        
+============================================================
+Pipelines Finished: 0/3
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1An.id,n._ID
+0,0:0
+1,0:1
+2,0:2
+3,0:3
+4,0:4
+5,0:5
+6,0:6
+7,0:7
+8,0:8
+9,0:9
+10,0:10
+
+============================================================
+[CSR_TRACE_QUERY 15]
+
+            CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX(
+                'Person',
+                'Knows',
+                'dc_dtree',
+                'dtree'
+            ) RETURN *;
+        
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aresult
+Dynamic connectivity index dc_dtree has been created with 0 edges.
+
+============================================================
+[CSR_TRACE_QUERY 16]
+
+            CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX(
+                'Person',
+                'Knows',
+                'dc_dtree_csr',
+                'dtree_csr'
+            ) RETURN *;
+        
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aresult
+Dynamic connectivity index dc_dtree_csr has been created with 0 edges.
+
+============================================================
+[CSR_TRACE_QUERY 17]
+
+            CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX(
+                'Person',
+                'Knows',
+                'dc_stree',
+                'stree'
+            ) RETURN *;
+        
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aresult
+Dynamic connectivity index dc_stree has been created with 0 edges.
+
+============================================================
+[CSR_TRACE_QUERY 18]
+
+            CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX(
+                'Person',
+                'Knows',
+                'dc_stree_csr',
+                'stree_csr'
+            ) RETURN *;
+        
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aresult
+Dynamic connectivity index dc_stree_csr has been created with 0 edges.
+
+============================================================
+[CSR_TRACE_QUERY 19]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 20]
+MATCH (a:Person {id: 0}), (b:Person {id: 1}) CREATE (a)-[:Knows {eid: 0}]->(b);
+============================================================
+Pipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 21]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 22]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 23]
+MATCH (a:Person {id: 1}), (b:Person {id: 2}) CREATE (a)-[:Knows {eid: 1}]->(b);
+============================================================
+Pipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 24]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 25]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 26]
+MATCH (a:Person {id: 2}), (b:Person {id: 3}) CREATE (a)-[:Knows {eid: 2}]->(b);
+============================================================
+Pipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 27]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 28]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 29]
+MATCH (a:Person {id: 3}), (b:Person {id: 4}) CREATE (a)-[:Knows {eid: 3}]->(b);
+============================================================
+Pipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 30]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 31]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 32]
+MATCH (a:Person {id: 4}), (b:Person {id: 5}) CREATE (a)-[:Knows {eid: 4}]->(b);
+============================================================
+Pipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 33]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 34]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 35]
+MATCH (a:Person {id: 5}), (b:Person {id: 6}) CREATE (a)-[:Knows {eid: 5}]->(b);
+============================================================
+Pipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 36]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 37]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 38]
+MATCH (a:Person {id: 6}), (b:Person {id: 7}) CREATE (a)-[:Knows {eid: 6}]->(b);
+============================================================
+Pipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 39]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 40]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 41]
+MATCH (a:Person {id: 0}), (b:Person {id: 4}) CREATE (a)-[:Knows {eid: 7}]->(b);
+============================================================
+Pipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 42]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 43]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 44]
+MATCH (a:Person {id: 5}), (b:Person {id: 7}) CREATE (a)-[:Knows {eid: 8}]->(b);
+============================================================
+Pipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 45]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 46]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 47]
+MATCH (a:Person {id: 8}), (b:Person {id: 9}) CREATE (a)-[:Knows {eid: 9}]->(b);
+============================================================
+Pipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 48]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 49]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 50]
+MATCH (a:Person {id: 9}), (b:Person {id: 10}) CREATE (a)-[:Knows {eid: 10}]->(b);
+============================================================
+Pipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 51]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 52]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 53]
+MATCH (a:Person {id: 8}), (b:Person {id: 10}) CREATE (a)-[:Knows {eid: 11}]->(b);
+============================================================
+Pipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 54]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 55]
+
+            CALL project_graph(
+                'ConnectivityGraph',
+                ['Person'],
+                ['Knows']
+            );
+        
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 56]
+RETURN 'S0_INITIAL' AS snapshot, 12 AS expectedTotalRelCount;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Asnapshot,expectedTotalRelCount
+S0_INITIAL,12
+
+============================================================
+[CSR_TRACE_QUERY 57]
+
+                MATCH ()-[r:Knows]->()
+                RETURN count(r) AS totalRelCount;
+            
+============================================================
+Pipelines Finished: 0/3
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AtotalRelCount
+12
+
+============================================================
+[CSR_TRACE_QUERY 58]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 59]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 60]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 61]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 62]
+MATCH (a:Person {id: 0}), (b:Person {id: 7}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 63]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 64]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 65]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 66]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 67]
+MATCH (a:Person {id: 0}), (b:Person {id: 9}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+0
+
+============================================================
+[CSR_TRACE_QUERY 68]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 69]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 70]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 71]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 72]
+MATCH (a:Person {id: 8}), (b:Person {id: 10}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 73]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 74]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 75]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 76]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 77]
+MATCH (a:Person {id: 5}), (b:Person {id: 7}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 78]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 79]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 80]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 81]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 82]
+MATCH (a:Person {id: 2}), (b:Person {id: 3}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 83]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 84]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 85]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 86]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 87]
+MATCH (a:Person {id: 4}), (b:Person {id: 5}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 88]
+
+                CALL weakly_connected_components(
+                    'ConnectivityGraph'
+                )
+                RETURN
+                    group_id,
+                    collect(node.id) AS members
+                ORDER BY group_id;
+            
+============================================================
+Pipelines Finished: 0/7
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/7
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 50%
+[1ACurrent Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 5/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/7
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 7/7
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Agroup_id,members
+0,"[0,1,2,3,4,5,6,7]"
+8,"[8,9,10]"
+
+============================================================
+[CSR_TRACE_QUERY 89]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 90]
+MATCH ()-[r:Knows]->() WHERE r.eid = 8 DELETE r;
+============================================================
+Pipelines Finished: 0/2
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/2
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/2
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 91]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 92]
+MATCH ()-[r:Knows]->() WHERE r.eid = 8 RETURN count(r) AS relCount;
+============================================================
+Pipelines Finished: 0/3
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1ArelCount
+0
+
+============================================================
+[CSR_TRACE_QUERY 93]
+RETURN 'S1_DELETE_NON_TREE_E8' AS snapshot, 11 AS expectedTotalRelCount;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Asnapshot,expectedTotalRelCount
+S1_DELETE_NON_TREE_E8,11
+
+============================================================
+[CSR_TRACE_QUERY 94]
+
+                MATCH ()-[r:Knows]->()
+                RETURN count(r) AS totalRelCount;
+            
+============================================================
+Pipelines Finished: 0/3
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AtotalRelCount
+11
+
+============================================================
+[CSR_TRACE_QUERY 95]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 96]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 97]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 98]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 99]
+MATCH (a:Person {id: 0}), (b:Person {id: 7}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 100]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 101]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 102]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 103]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 104]
+MATCH (a:Person {id: 0}), (b:Person {id: 9}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+0
+
+============================================================
+[CSR_TRACE_QUERY 105]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 106]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 107]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 108]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 109]
+MATCH (a:Person {id: 8}), (b:Person {id: 10}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 110]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 111]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 112]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 113]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 114]
+MATCH (a:Person {id: 5}), (b:Person {id: 7}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 115]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 116]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 117]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 118]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 119]
+MATCH (a:Person {id: 2}), (b:Person {id: 3}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 120]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 121]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 122]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 123]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 124]
+MATCH (a:Person {id: 4}), (b:Person {id: 5}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 125]
+
+                CALL weakly_connected_components(
+                    'ConnectivityGraph'
+                )
+                RETURN
+                    group_id,
+                    collect(node.id) AS members
+                ORDER BY group_id;
+            
+============================================================
+Pipelines Finished: 0/7
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/7
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 50%
+[1ACurrent Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 5/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/7
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 7/7
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Agroup_id,members
+0,"[0,1,2,3,4,5,6,7]"
+8,"[8,9,10]"
+
+============================================================
+[CSR_TRACE_QUERY 126]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 127]
+MATCH ()-[r:Knows]->() WHERE r.eid = 2 DELETE r;
+============================================================
+Pipelines Finished: 0/2
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/2
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/2
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 128]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 129]
+MATCH ()-[r:Knows]->() WHERE r.eid = 2 RETURN count(r) AS relCount;
+============================================================
+Pipelines Finished: 0/3
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1ArelCount
+0
+
+============================================================
+[CSR_TRACE_QUERY 130]
+RETURN 'S2_DELETE_TREE_E2_WITH_REPLACEMENT' AS snapshot, 10 AS expectedTotalRelCount;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Asnapshot,expectedTotalRelCount
+S2_DELETE_TREE_E2_WITH_REPLACEMENT,10
+
+============================================================
+[CSR_TRACE_QUERY 131]
+
+                MATCH ()-[r:Knows]->()
+                RETURN count(r) AS totalRelCount;
+            
+============================================================
+Pipelines Finished: 0/3
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AtotalRelCount
+10
+
+============================================================
+[CSR_TRACE_QUERY 132]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 133]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 134]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 135]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 136]
+MATCH (a:Person {id: 0}), (b:Person {id: 7}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 137]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 138]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 139]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 140]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 141]
+MATCH (a:Person {id: 0}), (b:Person {id: 9}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+0
+
+============================================================
+[CSR_TRACE_QUERY 142]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 143]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 144]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 145]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 146]
+MATCH (a:Person {id: 8}), (b:Person {id: 10}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 147]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 148]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 149]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 150]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 151]
+MATCH (a:Person {id: 5}), (b:Person {id: 7}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 152]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 153]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 154]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 155]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 156]
+MATCH (a:Person {id: 2}), (b:Person {id: 3}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 157]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 158]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 159]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 160]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 161]
+MATCH (a:Person {id: 4}), (b:Person {id: 5}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 162]
+
+                CALL weakly_connected_components(
+                    'ConnectivityGraph'
+                )
+                RETURN
+                    group_id,
+                    collect(node.id) AS members
+                ORDER BY group_id;
+            
+============================================================
+Pipelines Finished: 0/7
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/7
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 50%
+[1ACurrent Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 5/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/7
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 7/7
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Agroup_id,members
+0,"[0,1,2,3,4,5,6,7]"
+8,"[8,9,10]"
+
+============================================================
+[CSR_TRACE_QUERY 163]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 164]
+MATCH ()-[r:Knows]->() WHERE r.eid = 4 DELETE r;
+============================================================
+Pipelines Finished: 0/2
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/2
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/2
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 165]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 166]
+MATCH ()-[r:Knows]->() WHERE r.eid = 4 RETURN count(r) AS relCount;
+============================================================
+Pipelines Finished: 0/3
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1ArelCount
+0
+
+============================================================
+[CSR_TRACE_QUERY 167]
+RETURN 'S3_DELETE_BRIDGE_E4' AS snapshot, 9 AS expectedTotalRelCount;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Asnapshot,expectedTotalRelCount
+S3_DELETE_BRIDGE_E4,9
+
+============================================================
+[CSR_TRACE_QUERY 168]
+
+                MATCH ()-[r:Knows]->()
+                RETURN count(r) AS totalRelCount;
+            
+============================================================
+Pipelines Finished: 0/3
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AtotalRelCount
+9
+
+============================================================
+[CSR_TRACE_QUERY 169]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 170]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 171]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 172]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 173]
+MATCH (a:Person {id: 0}), (b:Person {id: 7}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+0
+
+============================================================
+[CSR_TRACE_QUERY 174]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 175]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 176]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 177]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 178]
+MATCH (a:Person {id: 0}), (b:Person {id: 9}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+0
+
+============================================================
+[CSR_TRACE_QUERY 179]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 180]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 181]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 182]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 183]
+MATCH (a:Person {id: 8}), (b:Person {id: 10}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 184]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 185]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 186]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 187]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 188]
+MATCH (a:Person {id: 5}), (b:Person {id: 7}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 189]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 190]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 191]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 192]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 193]
+MATCH (a:Person {id: 2}), (b:Person {id: 3}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 194]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 195]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 196]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 197]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 198]
+MATCH (a:Person {id: 4}), (b:Person {id: 5}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+0
+
+============================================================
+[CSR_TRACE_QUERY 199]
+
+                CALL weakly_connected_components(
+                    'ConnectivityGraph'
+                )
+                RETURN
+                    group_id,
+                    collect(node.id) AS members
+                ORDER BY group_id;
+            
+============================================================
+Pipelines Finished: 0/7
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/7
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 33%
+[1ACurrent Pipeline Progress: 66%
+[1A[2K[1APipelines Finished: 5/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/7
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 7/7
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Agroup_id,members
+0,"[0,1,2,3,4]"
+5,"[5,6,7]"
+8,"[8,9,10]"
+
+============================================================
+[CSR_TRACE_QUERY 200]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 201]
+MATCH (a:Person {id: 2}), (b:Person {id: 6}) CREATE (a)-[:Knows {eid: 12}]->(b);
+============================================================
+Pipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 202]
+COMMIT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 203]
+MATCH ()-[r:Knows]->() WHERE r.eid = 12 RETURN count(r) AS relCount;
+============================================================
+Pipelines Finished: 0/3
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1ArelCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 204]
+RETURN 'S4_INSERT_E12_RECONNECT' AS snapshot, 10 AS expectedTotalRelCount;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Asnapshot,expectedTotalRelCount
+S4_INSERT_E12_RECONNECT,10
+
+============================================================
+[CSR_TRACE_QUERY 205]
+
+                MATCH ()-[r:Knows]->()
+                RETURN count(r) AS totalRelCount;
+            
+============================================================
+Pipelines Finished: 0/3
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AtotalRelCount
+10
+
+============================================================
+[CSR_TRACE_QUERY 206]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 207]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 208]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 209]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 210]
+MATCH (a:Person {id: 0}), (b:Person {id: 7}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 211]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 212]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 213]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 214]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 215]
+MATCH (a:Person {id: 0}), (b:Person {id: 9}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+0
+
+============================================================
+[CSR_TRACE_QUERY 216]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 217]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 218]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 219]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 220]
+MATCH (a:Person {id: 8}), (b:Person {id: 10}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 221]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 222]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 223]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 224]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 225]
+MATCH (a:Person {id: 5}), (b:Person {id: 7}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 226]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 227]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 228]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 229]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 230]
+MATCH (a:Person {id: 2}), (b:Person {id: 3}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 231]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 232]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 233]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 234]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 235]
+MATCH (a:Person {id: 4}), (b:Person {id: 5}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 236]
+
+                CALL weakly_connected_components(
+                    'ConnectivityGraph'
+                )
+                RETURN
+                    group_id,
+                    collect(node.id) AS members
+                ORDER BY group_id;
+            
+============================================================
+Pipelines Finished: 0/7
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/7
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 50%
+[1ACurrent Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 5/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/7
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 7/7
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Agroup_id,members
+0,"[0,1,2,3,4,5,6,7]"
+8,"[8,9,10]"
+
+============================================================
+[CSR_TRACE_QUERY 237]
+BEGIN TRANSACTION;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 238]
+
+            MATCH
+                (a:Person {id: 1}),
+                (b:Person {id: 9})
+            CREATE
+                (a)-[:Knows {eid: 13}]->(b);
+        
+============================================================
+Pipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 239]
+ROLLBACK;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 240]
+MATCH ()-[r:Knows]->() WHERE r.eid = 13 RETURN count(r) AS relCount;
+============================================================
+Pipelines Finished: 0/3
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1ArelCount
+0
+
+============================================================
+[CSR_TRACE_QUERY 241]
+RETURN 'S5_ROLLBACK_E13' AS snapshot, 10 AS expectedTotalRelCount;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Asnapshot,expectedTotalRelCount
+S5_ROLLBACK_E13,10
+
+============================================================
+[CSR_TRACE_QUERY 242]
+
+                MATCH ()-[r:Knows]->()
+                RETURN count(r) AS totalRelCount;
+            
+============================================================
+Pipelines Finished: 0/3
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AtotalRelCount
+10
+
+============================================================
+[CSR_TRACE_QUERY 243]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 244]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 245]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 246]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 247]
+MATCH (a:Person {id: 0}), (b:Person {id: 7}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 248]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 249]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 250]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 251]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 252]
+MATCH (a:Person {id: 0}), (b:Person {id: 9}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+0
+
+============================================================
+[CSR_TRACE_QUERY 253]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 254]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 255]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 256]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 257]
+MATCH (a:Person {id: 8}), (b:Person {id: 10}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 258]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 259]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 260]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 261]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 262]
+MATCH (a:Person {id: 5}), (b:Person {id: 7}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 263]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 264]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 265]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 266]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 267]
+MATCH (a:Person {id: 2}), (b:Person {id: 3}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 268]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 269]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 270]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 271]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 272]
+MATCH (a:Person {id: 4}), (b:Person {id: 5}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 273]
+
+                CALL weakly_connected_components(
+                    'ConnectivityGraph'
+                )
+                RETURN
+                    group_id,
+                    collect(node.id) AS members
+                ORDER BY group_id;
+            
+============================================================
+Pipelines Finished: 0/7
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/7
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 50%
+[1ACurrent Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 5/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/7
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 7/7
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Agroup_id,members
+0,"[0,1,2,3,4,5,6,7]"
+8,"[8,9,10]"
+
+============================================================
+[CSR_TRACE_QUERY 274]
+CHECKPOINT;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1A
+
+============================================================
+[CSR_TRACE_QUERY 275]
+RETURN 'S6_AFTER_CHECKPOINT' AS snapshot, 10 AS expectedTotalRelCount;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Asnapshot,expectedTotalRelCount
+S6_AFTER_CHECKPOINT,10
+
+============================================================
+[CSR_TRACE_QUERY 276]
+
+                MATCH ()-[r:Knows]->()
+                RETURN count(r) AS totalRelCount;
+            
+============================================================
+Pipelines Finished: 0/3
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/3
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/3
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AtotalRelCount
+10
+
+============================================================
+[CSR_TRACE_QUERY 277]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 278]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 279]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 280]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 7, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 281]
+MATCH (a:Person {id: 0}), (b:Person {id: 7}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 282]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 283]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 284]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 285]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 9, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+False
+
+============================================================
+[CSR_TRACE_QUERY 286]
+MATCH (a:Person {id: 0}), (b:Person {id: 9}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+0
+
+============================================================
+[CSR_TRACE_QUERY 287]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 288]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 289]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 290]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 8, 10, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 291]
+MATCH (a:Person {id: 8}), (b:Person {id: 10}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 292]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 293]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 294]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 295]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 5, 7, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 296]
+MATCH (a:Person {id: 5}), (b:Person {id: 7}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 297]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 298]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 299]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 300]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 2, 3, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 301]
+MATCH (a:Person {id: 2}), (b:Person {id: 3}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 302]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 303]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_dtree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 304]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 305]
+CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 4, 5, 'dc_stree_csr') RETURN *;
+============================================================
+Pipelines Finished: 1/1
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Aconnected
+True
+
+============================================================
+[CSR_TRACE_QUERY 306]
+MATCH (a:Person {id: 4}), (b:Person {id: 5}) MATCH (a)-[:Knows* SHORTEST 1..10]-(b) RETURN count(*) AS bfsPathCount;
+============================================================
+Pipelines Finished: 1/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 5/6
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/6
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1AbfsPathCount
+1
+
+============================================================
+[CSR_TRACE_QUERY 307]
+
+                CALL weakly_connected_components(
+                    'ConnectivityGraph'
+                )
+                RETURN
+                    group_id,
+                    collect(node.id) AS members
+                ORDER BY group_id;
+            
+============================================================
+Pipelines Finished: 0/7
+Current Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 1/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 2/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 3/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 4/7
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 50%
+[1A[2K[1APipelines Finished: 5/7
+Current Pipeline Progress: 0%
+[1A[2K[1APipelines Finished: 6/7
+Current Pipeline Progress: 0%
+[1ACurrent Pipeline Progress: 100%
+[1A[2K[1APipelines Finished: 7/7
+Current Pipeline Progress: 0%
+[2A[2K[1B[2K[1Agroup_id,members
+0,"[0,1,2,3,4,5,6,7]"
+8,"[8,9,10]"

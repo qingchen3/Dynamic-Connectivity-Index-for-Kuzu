@@ -2,6 +2,8 @@
 
 #include "common/dtree_index.h"
 #include "common/stree_index.h"
+#include "common/stree_csr_index.h"
+#include "common/dtree_csr_index.h"
 
 #include <algorithm>
 #include <cctype>
@@ -21,6 +23,14 @@ std::unique_ptr<DynamicConnectivityIndex> createDynamicConnectivityIndex(const s
 
     if (normalizedMethod == "dtree") {
         return std::make_unique<DTreeIndex>();
+    }
+
+    if (normalizedMethod == "dtree_csr") {
+        return std::make_unique<DTreeCSRIndex>();
+    }
+
+    if (normalizedMethod == "stree_csr") {
+        return std::make_unique<STreeCSRIndex>();
     }
 
     throw std::runtime_error("Unknown dynamic connectivity index method: " + method);

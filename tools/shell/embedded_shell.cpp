@@ -14,6 +14,9 @@
 #include <iomanip>
 #include <regex>
 #include <sstream>
+#include <fstream>
+#include <cstdio>
+#include <chrono>
 
 #include "binder/binder.h"
 #include "catalog/catalog.h"
@@ -587,6 +590,113 @@ void EmbeddedShell::run() {
     // `true` when a multiline query is incomplete. See `EmbeddedShell::processInput`.
     continueLine = false;
     currLine = "";
+    // ============================================================
+    // Temporary deterministic experiment for CSR storage tracing.
+    //
+    // true:  run the hardcoded queries and return
+    // false: run the original interactive Kuzu shell
+    // ============================================================
+    const bool runCSRStorageTrace = false;
+
+    if (runCSRStorageTrace) {
+
+        auto now = std::chrono::system_clock::now();
+        auto time_t_now = std::chrono::system_clock::to_time_t(now);
+        std::stringstream ss;
+        ss << std::put_time(std::localtime(&time_t_now), "%Y%m%d_%H%M%S");
+
+        std::string traceOutputPath_str = 
+            "/Users/qingchen/projects/"
+            "Dynamic-Connectivity-Index-for-Kuzu/"
+            "temp_running_" + ss.str() + ".log";
+
+        const char* traceOutputPath = traceOutputPath_str.c_str();
+
+        FILE* traceOutput =
+            freopen(traceOutputPath, "w", stdout);
+
+        if (traceOutput == nullptr) {
+            fprintf(
+                stderr,
+                "Failed to open trace output file: %s\n",
+                traceOutputPath);
+            return;
+        }
+
+        setvbuf(stdout, nullptr, _IOLBF, 0);
+
+        setMode("csv");
+        setStats("off");
+
+        fprintf(
+            stderr,
+            "Writing CSR trace to:\n%s\n",
+            traceOutputPath);
+        
+        const std::string scenarioPath =
+        "/Users/qingchen/projects/"
+        "Dynamic-Connectivity-Index-for-Kuzu/"
+        "test/dynamic_connectivity/node_insertion_test.cypher";
+       
+        std::ifstream input(scenarioPath);
+
+        if (!input.is_open()) {
+            fprintf(
+                stderr,
+                "Failed to open scenario file: %s\n",
+                scenarioPath.c_str());
+            return;
+        }
+        
+        std::string line;
+        std::string query;
+        size_t queryIdx = 0;
+
+        while (std::getline(input, line)) {
+            query += line;
+            query += "\n";
+
+            // Keep accumulating until one complete Cypher statement
+            // has been read.
+            if (!cypherComplete((char*)query.c_str())) {
+                continue;
+            }
+
+            printf(
+                "\n"
+                "============================================================\n"
+                "[CSR_TRACE_QUERY %zu]\n"
+                "%s"
+                "============================================================\n",
+                queryIdx,
+                query.c_str());
+
+            auto queryResult = conn->query(query);
+
+            if (queryResult->isSuccess()) {
+                printInterrupted = false;
+                printExecutionResult(*queryResult);
+            } else {
+                printf(
+                    "[CSR_TRACE_ERROR %zu] %s\n",
+                    queryIdx,
+                    queryResult->getErrorMessage().c_str());
+
+                break;
+            }
+
+            query.clear();
+            ++queryIdx;
+        }
+
+        // Do not enter the original interactive linenoise loop.
+        fflush(stdout);
+        return;
+    }
+
+    // ============================================================
+    // Original interactive-shell implementation remains unchanged.
+    // ============================================================
 
 #ifndef _WIN32
     termios raw{};

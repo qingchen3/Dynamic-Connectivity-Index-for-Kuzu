@@ -1,6 +1,7 @@
 #include "storage/table/rel_table.h"
 
 #include <algorithm>
+#include <atomic>
 
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/exception/message.h"
@@ -14,6 +15,7 @@
 #include "storage/storage_utils.h"
 #include "storage/table/column_chunk.h"
 #include "storage/table/column_chunk_data.h"
+#include "storage/table/node_table.h"
 #include "storage/table/rel_table_data.h"
 #include "storage/wal/local_wal.h"
 #include "transaction/transaction.h"
@@ -243,9 +245,19 @@ bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) 
     const auto& relDeleteState = deleteState.cast<RelTableDeleteState>();
     KU_ASSERT(relDeleteState.relIDVector.state->getSelVector().getSelSize() == 1);
     const auto relIDPos = relDeleteState.relIDVector.state->getSelVector()[0];
+    
+    // get complete relationship inforamtion before deletion
+    const auto deletedRelID =
+        relDeleteState.relIDVector
+            .getValue<internalID_t>(relIDPos);
+
     bool isDeleted = false;
-    if (const auto relOffset = relDeleteState.relIDVector.readNodeOffset(relIDPos);
-        relOffset >= StorageConstants::MAX_NUM_ROWS_IN_TABLE) {
+    
+    //if (const auto relOffset = relDeleteState.relIDVector.readNodeOffset(relIDPos);
+    const auto debugRelOffset = relDeleteState.relIDVector.readNodeOffset(relIDPos);
+    KU_ASSERT(deletedRelID.offset == debugRelOffset);
+
+    if (deletedRelID.offset >= StorageConstants::MAX_NUM_ROWS_IN_TABLE) {
         const auto localTable = transaction->getLocalStorage()->getLocalTable(tableID);
         KU_ASSERT(localTable);
         isDeleted = localTable->delete_(transaction, deleteState);
@@ -257,6 +269,25 @@ bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) 
             if (!isDeleted) {
                 break;
             }
+        }
+        if (isDeleted) {
+            // Buffer committed-edge deletion for rel-backed index maintenance at
+            // commit. Locally inserted rels need no buffering: they never reach
+            // the indexes.
+            const auto srcPos = relDeleteState.srcNodeIDVector.state->getSelVector()[0];
+            const auto dstPos = relDeleteState.dstNodeIDVector.state->getSelVector()[0];
+            const auto srcOffset = relDeleteState.srcNodeIDVector.getValue<nodeID_t>(srcPos).offset;
+            const auto dstOffset = relDeleteState.dstNodeIDVector.getValue<nodeID_t>(dstPos).offset;
+            auto& localRelTable = 
+                transaction->getLocalStorage()
+                ->getOrCreateLocalTable(*this)
+                ->cast<LocalRelTable>();
+
+            localRelTable.pendingRelDeletes.push_back(
+                    PendingRelDelete {
+                        srcOffset,
+                        dstOffset,
+                        deletedRelID});
         }
     }
     if (isDeleted) {
@@ -409,6 +440,27 @@ void RelTable::pushInsertInfo(const Transaction* transaction, RelDataDirection d
 void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntry,
     LocalTable* localTable) {
     auto& localRelTable = localTable->cast<LocalRelTable>();
+    
+    auto& fromNodeTable = StorageManager::Get(*context)
+                            ->getTable(fromNodeTableID)
+                            ->cast<NodeTable>();
+    std::vector<Index*> relBackedIndexes;
+    for (auto& indexHolder : fromNodeTable.getIndexes()) {
+        if (indexHolder.isLoaded() && indexHolder.getIndex()->isBackedByRelTable(tableID)) {
+            relBackedIndexes.push_back(indexHolder.getIndex());
+        }
+    }
+    // Drain pending deletes before the isEmpty early return (delete-only
+    // transactions have an empty local CSR index) and before the insert scan
+    // (delete-then-reinsert of the same pair must end present in the index).
+    if (!relBackedIndexes.empty()) {
+        for (const auto& [srcOffset, dstOffset, relID] : localRelTable.pendingRelDeletes) {
+            for (auto* index : relBackedIndexes) {
+                 index->commitRelDelete(context, srcOffset, dstOffset, relID);
+            }
+        }
+    }
+
     if (localRelTable.isEmpty()) {
         localTable->clear(*MemoryManager::Get(*context));
         return;
@@ -417,11 +469,6 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
     updateRelOffsets(localRelTable);
     // For both forward and backward directions, re-org local storage into compact CSR node groups.
     auto& localNodeGroup = localRelTable.getLocalNodeGroup();
-    // Scan from local node group and write to WAL.
-    std::vector<column_id_t> columnIDsToScan;
-    for (auto i = 0u; i < localRelTable.getNumColumns(); i++) {
-        columnIDsToScan.push_back(i);
-    }
 
     std::vector<column_id_t> columnIDsToCommit;
     columnIDsToCommit.push_back(0); // NBR column.
@@ -448,6 +495,25 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
         }
     }
 
+    if (!relBackedIndexes.empty()) {
+        for (auto& [srcOffset, rowIndices] : localRelTable.getCSRIndex(RelDataDirection::FWD)) {
+            for (const auto row : rowIndices) {
+                auto [chunkedGroupIdx, rowInChunk] = StorageUtils::getQuotientRemainder(row,
+                    StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
+                auto* chunkedGroup = localNodeGroup.getChunkedNodeGroup(chunkedGroupIdx); 
+                const auto dstOffset = chunkedGroup->getColumnChunk(LOCAL_NBR_NODE_ID_COLUMN_ID)
+                                           .getValue<offset_t>(rowInChunk);
+                auto& relIDColumn = chunkedGroup->getColumnChunk(LOCAL_REL_ID_COLUMN_ID);
+                const auto relOffset = relIDColumn.getValue<offset_t>(rowInChunk);
+
+                internalID_t relID {relOffset, tableID};
+                for (auto* index : relBackedIndexes) {
+                    index->commitRelInsert(context, srcOffset, dstOffset, relID);
+                }
+            }
+        }
+    }
+    
     localRelTable.clear(*MemoryManager::Get(*context));
 }
 

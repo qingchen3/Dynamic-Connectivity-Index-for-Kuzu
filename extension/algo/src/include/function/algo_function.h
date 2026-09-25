@@ -5,6 +5,30 @@
 namespace kuzu {
 namespace algo_extension {
 
+struct CreateDynamicConnectivityIndexFunction {
+    static constexpr const char* name = "CREATE_DYNAMIC_CONNECTIVITY_INDEX";
+
+    static function::function_set getFunctionSet();
+};
+
+struct DynamicConnectivityQueryFunction {
+    static constexpr const char* name = "Dynamic_Connectivity_Query";
+
+    static function::function_set getFunctionSet();
+};
+
+struct DynamicConnectivityInsertEdgeFunction {
+    static constexpr const char* name = "DYNAMIC_CONNECTIVITY_INSERT_EDGE";
+
+    static function::function_set getFunctionSet();
+};
+
+struct DynamicConnectivityDeleteEdgeFunction {
+    static constexpr const char* name = "DYNAMIC_CONNECTIVITY_DELETE_EDGE";
+
+    static function::function_set getFunctionSet();
+};
+
 struct SCCFunction {
     static constexpr const char* name = "STRONGLY_CONNECTED_COMPONENTS";
 

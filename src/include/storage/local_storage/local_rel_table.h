@@ -30,6 +30,12 @@ struct DirectedCSRIndex {
     index_t index;
 };
 
+struct PendingRelDelete {
+    common::offset_t srcOffset;
+    common::offset_t dstOffset;
+    common::internalID_t relID;
+};
+
 class LocalRelTable final : public LocalTable {
 public:
     LocalRelTable(const catalog::TableCatalogEntry* tableEntry, const Table& table,
@@ -48,12 +54,16 @@ public:
 
     static void initializeScan(TableScanState& state);
     bool scan(const transaction::Transaction* transaction, TableScanState& state) const;
-
+    // Exact committed relationships deleted by this transaction.
+    // Drained into relationship-backed indexes at commit and discarded
+    // with the remaining transaction-local state on rollback.
+    std::vector<PendingRelDelete> pendingRelDeletes;
     void clear(MemoryManager&) override {
         localNodeGroup.reset();
         for (auto& index : directedIndices) {
             index.clear();
         }
+        pendingRelDeletes.clear();
     }
     bool isEmpty() const {
         KU_ASSERT(directedIndices.size() >= 1);

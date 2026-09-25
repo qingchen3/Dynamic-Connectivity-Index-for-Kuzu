@@ -15,7 +15,16 @@ public:
         stree.insertEdge(u, v);
     }
 
-    void deleteEdge(node_key_t u, node_key_t v) override {
+    void deleteEdge(node_key_t u, node_key_t v) {
+        stree.deleteEdge(u, v);
+    }
+    
+    void deleteEdge(
+        node_key_t u,
+        node_key_t v,
+        const DynamicConnectivityIndex::NeighborProvider& getNeighbors)
+        override {
+        (void)getNeighbors;
         stree.deleteEdge(u, v);
     }
 

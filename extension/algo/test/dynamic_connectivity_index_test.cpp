@@ -3,8 +3,14 @@
 #include "common/dtree_index.h"
 #include "common/delete_diagnostics.h"
 
+#include "index/native_dynamic_connectivity_index.h"
+
 #include "gtest/gtest.h"
 
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 #include <stdexcept>
 
 using namespace kuzu::algo_extension;

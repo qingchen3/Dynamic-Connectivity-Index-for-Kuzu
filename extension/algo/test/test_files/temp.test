@@ -1,0 +1,21 @@
+-TEMP TEST
+
+--
+
+-CASE DCNeighbourProviderReplacementExists
+-LOAD_DYNAMIC_EXTENSION algo
+-STATEMENT CREATE NODE TABLE Person(id INT64 PRIMARY KEY);
+---- ok
+# One node per statement: a single multi-node CREATE does not assign
+# offsets in textual order, and every literal offset below depends on it.
+-STATEMENT CREATE (:Person {id: 0});
+---- ok
+-STATEMENT CREATE (:Person {id: 1});
+---- ok
+-STATEMENT CREATE (:Person {id: 2});
+---- ok
+-STATEMENT MATCH (p:Person) RETURN p.id, OFFSET(ID(p));
+---- 3
+0|0
+1|1
+2|2

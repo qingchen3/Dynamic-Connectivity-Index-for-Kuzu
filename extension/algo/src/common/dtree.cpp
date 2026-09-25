@@ -39,7 +39,6 @@ namespace dtree_internal {
         return n_w;
     }
 
-
     DNode* link(DNode* n_u, DNode* r_u, DNode* n_v) {
         n_v->parent = n_u;
         n_u->children.insert(n_v);
@@ -59,7 +58,6 @@ namespace dtree_internal {
         return r_u;
     }
 
-
     std::pair<DNode*, DNode*> unlink(DNode* n_v) {
         if (n_v->parent == nullptr) {
             return std::make_pair(n_v, n_v);
@@ -74,7 +72,6 @@ namespace dtree_internal {
         return std::make_pair(n_v, c);
     }
 
-
     std::pair<DNode*, int> find_root(DNode* node) {
         int dist = 0;
         while(node->parent != nullptr) {
@@ -83,7 +80,6 @@ namespace dtree_internal {
         }
         return std::make_pair(node, dist);
     }
-
 
     void insert_edge(int u, int v, std::unordered_map<int, DNode*> &Dtree) {
 
@@ -140,22 +136,18 @@ namespace dtree_internal {
         }
     }
 
-    //  insert_te return value discarded (DTree.cpp:99)  
-    // insert_te returns the (potentially new) root after rebalancing, but insert_edge ignores it. If the root changes, nothing tracks it. 
     DNode* insert_te(DNode* n_u, DNode* n_v, DNode* r_u, DNode* r_v) {
-        if(r_v->size > r_u->size) {
+        if(r_v->size < r_u->size) {
             return link(n_u, r_u, reroot(n_v));
         } else {
             return link(n_v, r_v, reroot(n_u));
         }
     }
 
-
     void delete_nte(DNode* n_u, DNode* n_v) {
         n_u->nte.erase(n_v);
         n_v->nte.erase(n_u);
     }
-
 
     std::pair<DNode*, DNode*> delete_te(DNode* n_u, DNode* n_v, DeleteDiagnostics& diag) {
         // determine parent and child
@@ -204,7 +196,6 @@ namespace dtree_internal {
         }
     }
 
-
     std::tuple<DNode*, DNode*, DNode*> BFS_select(DNode* r, DeleteDiagnostics& diag) {
         std::queue<DNode*> q;
         q.push(r);
@@ -246,7 +237,6 @@ namespace dtree_internal {
         return std::make_tuple(n_rs, n_rl, new_r);
     }
 
-
     void delete_edge(int u, int v, std::unordered_map<int, DNode*> &Dtree, DeleteDiagnostics& diag) {
         if(Dtree.find(u) == Dtree.end() || Dtree.find(v) == Dtree.end()) {
             return;
@@ -259,8 +249,7 @@ namespace dtree_internal {
         }
     }
 
-
-    int query(DNode* n_u, DNode* n_v) {
+    int query(DNode* n_u, DNode* n_v) { 
         DNode* d_u = nullptr;
 
         while (n_u->parent != nullptr) {
@@ -276,16 +265,8 @@ namespace dtree_internal {
         }
         if (d_v != nullptr && d_v->size > n_v->size / 2) n_v = reroot(d_v);
 
-        return n_u->key == n_v->key;
+        return find_root(n_u).first->key == find_root(n_v).first->key;
     }
-
-
-    int query_simple(DNode* n_u, DNode* n_v) {
-        while (n_u->parent != nullptr) n_u = n_u->parent;
-        while (n_v->parent != nullptr) n_v = n_v->parent;
-        return n_u->key == n_v->key;
-    }
-
 
     void cal_size(std::unordered_map<int, DNode*> &Dtree) {
         int total_size = 0;
@@ -328,7 +309,7 @@ bool DTree::connected(node_key_t u, node_key_t v) const {
     if (uIt == nodes.end() || vIt == nodes.end()) {
         return false;
     }
-    return dtree_internal::query_simple(uIt->second, vIt->second) != 0;
+    return dtree_internal::query(uIt->second, vIt->second) != 0;
 }
 
 bool DTree::containsNode(node_key_t key) const {

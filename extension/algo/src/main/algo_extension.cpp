@@ -16,6 +16,10 @@ void AlgoExtension::load(main::ClientContext* context) {
     ExtensionUtils::addTableFuncAlias<SCCKosarajuAliasFunction>(db);
     ExtensionUtils::addTableFunc<WeaklyConnectedComponentsFunction>(db);
     ExtensionUtils::addTableFuncAlias<WeaklyConnectedComponentsAliasFunction>(db);
+    ExtensionUtils::addTableFunc<CreateDynamicConnectivityIndexFunction>(db);
+    ExtensionUtils::addTableFunc<DynamicConnectivityQueryFunction>(db);
+    ExtensionUtils::addTableFunc<DynamicConnectivityInsertEdgeFunction>(db);
+    ExtensionUtils::addTableFunc<DynamicConnectivityDeleteEdgeFunction>(db);
     ExtensionUtils::addTableFunc<PageRankFunction>(db);
     ExtensionUtils::addTableFuncAlias<PageRankAliasFunction>(db);
     ExtensionUtils::addTableFunc<KCoreDecompositionFunction>(db);

@@ -15,7 +15,16 @@ public:
         dtree.insertEdge(u, v);
     }
 
-    void deleteEdge(node_key_t u, node_key_t v) override {
+    void deleteEdge(node_key_t u, node_key_t v) {
+        dtree.deleteEdge(u, v);
+    }
+
+    void deleteEdge(
+        node_key_t u,
+        node_key_t v,
+        const DynamicConnectivityIndex::NeighborProvider& getNeighbors)
+        override {
+        (void)getNeighbors;
         dtree.deleteEdge(u, v);
     }
 
