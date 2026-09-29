@@ -44,6 +44,12 @@ public:
         return "stree";
     }
 
+    IndexMemoryFootprint memoryFootprint() const override {
+        auto result = stree.memoryFootprint();
+        result.bytesNodes += sizeof(*this) - sizeof(stree);
+        return result;
+    }
+
     bool supportsDeleteDiagnostics() const override {
         return true;
     }

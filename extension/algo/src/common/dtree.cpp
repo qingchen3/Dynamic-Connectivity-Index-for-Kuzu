@@ -320,5 +320,33 @@ uint64_t DTree::getNumNodes() const {
     return nodes.size();
 }
 
-} // end of namespace algo_extension
-} // end of namespace kuzu
+IndexMemoryFootprint DTree::memoryFootprint() const {
+    using Node = dtree_internal::DNode;
+    IndexMemoryFootprint result;
+    result.numNodes = nodes.size();
+
+    result.bytesNodes =
+        sizeof(*this) +
+        memory_footprint_detail::mapBucketBytes<int, Node*>(
+            nodes.bucket_count(), nodes.size()) +
+        nodes.size() *
+            (memory_footprint_detail::mapNodeBytes<int, Node*>() +
+            sizeof(Node));
+
+    const auto setNodeBytes = 
+        memory_footprint_detail::setNodeBytes<Node*>();
+    
+    for (const auto& [key, node] : nodes) {
+        result.numTreeEdges += node->children.size();
+        result.numNonTreeEdges += node->nte.size();
+    }
+
+    result.bytesEdges = 
+        (result.numTreeEdges + result.numNonTreeEdges) * setNodeBytes;
+    
+    result.numNonTreeEdges /= 2;
+    return result;
+}
+
+} //namespace algo_extension
+} //namespace kuzu

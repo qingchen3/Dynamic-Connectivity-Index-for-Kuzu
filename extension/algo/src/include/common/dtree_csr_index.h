@@ -38,6 +38,12 @@ public:
         return "dtree_csr";
     }
 
+    IndexMemoryFootprint memoryFootprint() const override {
+        auto result = dtree_csr.memoryFootprint();
+        result.bytesNodes += sizeof(*this) - sizeof(dtree_csr);
+        return result;
+    }
+
 private:
     DTree_CSR dtree_csr;
 };

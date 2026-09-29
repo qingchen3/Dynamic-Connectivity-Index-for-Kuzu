@@ -242,5 +242,30 @@ bool STree_CSR::connected(node_key_t u, node_key_t v) const {
     return findRoot(uNode) == findRoot(vNode);
 }
 
+IndexMemoryFootprint STree_CSR::memoryFootprint() const {
+    IndexMemoryFootprint result;
+    result.numNodes = nodes.size();
+
+    result.bytesNodes =
+        sizeof(*this) +
+        memory_footprint_detail::mapBucketBytes<
+            node_key_t, std::unique_ptr<SNode_CSR>>(
+            nodes.bucket_count(), nodes.size()) +
+        nodes.size() *
+            (memory_footprint_detail::mapNodeBytes<
+                 node_key_t, std::unique_ptr<SNode_CSR>>() +
+             sizeof(SNode_CSR));
+
+    const auto setNodeBytes =
+        memory_footprint_detail::setNodeBytes<SNode_CSR*>();
+
+    for (const auto& [key, node] : nodes) {
+        result.numTreeEdges += node->children.size();
+    }
+
+    result.bytesEdges = result.numTreeEdges * setNodeBytes;
+    return result;
+}
+
 } // namespace algo_extension
 } // namespace kuzu

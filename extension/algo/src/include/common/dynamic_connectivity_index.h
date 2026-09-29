@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "common/delete_diagnostics.h"
+#include "common/dc_index_memory_footprint.h"
 
 namespace kuzu {
 namespace algo_extension {
@@ -32,6 +33,8 @@ public:
     virtual uint64_t getNumNodes() const = 0;
 
     virtual std::string getName() const = 0;
+
+    virtual IndexMemoryFootprint memoryFootprint() const = 0;
 
     // Whether this index instruments deletions and exposes per-deletion
     // diagnostics via lastDeleteDiagnostics().

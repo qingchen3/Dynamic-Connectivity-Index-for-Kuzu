@@ -40,6 +40,12 @@ public:
         return "stree_csr";
     }
 
+    IndexMemoryFootprint memoryFootprint() const override {
+        auto result = stree_csr.memoryFootprint();
+        result.bytesNodes += sizeof(*this) - sizeof(stree_csr);
+        return result;
+    }
+
 private:
     STree_CSR stree_csr;
 };

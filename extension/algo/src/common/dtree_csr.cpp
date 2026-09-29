@@ -346,5 +346,29 @@ uint64_t DTree_CSR::getNumNodes() const {
     return nodes.size();
 }
 
+IndexMemoryFootprint DTree_CSR::memoryFootprint() const {
+    using Node = dtreeCSR_internal::DNode_CSR;
+    IndexMemoryFootprint result;
+    result.numNodes = nodes.size();
+
+    result.bytesNodes =
+        sizeof(*this) +
+        memory_footprint_detail::mapBucketBytes<int, Node*>(
+            nodes.bucket_count(), nodes.size()) +
+        nodes.size() *
+            (memory_footprint_detail::mapNodeBytes<int, Node*>() +
+             sizeof(Node));
+
+    const auto setNodeBytes =
+        memory_footprint_detail::setNodeBytes<Node*>();
+
+    for (const auto& [key, node] : nodes) {
+        result.numTreeEdges += node->children.size();
+    }
+
+    result.bytesEdges = result.numTreeEdges * setNodeBytes;
+    return result;
+}
+
 } // end of namespace algo_extension
 } // end of namespace kuzu

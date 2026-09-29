@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "common/dynamic_connectivity_index.h"
+#include "common/dc_index_memory_footprint.h"
 
 namespace kuzu {
 namespace algo_extension {
@@ -74,7 +75,7 @@ public:
     bool connected(node_key_t u, node_key_t v) const;
     bool containsNode(node_key_t key) const;
     uint64_t getNumNodes() const;
-
+    IndexMemoryFootprint memoryFootprint() const;
 private:
     static int toInternalKey(node_key_t key);
 
