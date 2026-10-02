@@ -4,7 +4,7 @@
 //   dynamic_connectivity_memory_bench <method> --workload=FILE [options]
 //   dynamic_connectivity_memory_bench <method> --random=NODES,OPS,BIAS
 //
-//   <method>      dtree | dtree_csr | stree | stree_csr
+//   <method>      dtree | dtree_lazy_nte | dtree_csr | stree | stree_csr
 //   --dataset     the edges to load, in file order, with nothing ever deleted.
 //                 This is the experiment the Python runs. Takes either a plain
 //                 edge list, "102 108" per line, or a recorded trace, "ins 102

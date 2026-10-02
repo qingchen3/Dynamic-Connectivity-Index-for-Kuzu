@@ -53,8 +53,9 @@ import sys
 import tempfile
 
 METHODS = ("dtree", "dtree_csr", "stree", "stree_csr")
-# Each backend and the CSR variant that drops its nte set.
-PAIRS = (("dtree", "dtree_csr"), ("stree", "stree_csr"))
+OPTIONAL_METHODS = ("dtree_lazy_nte",)
+PAIRS = (("dtree", "dtree_csr"), ("stree", "stree_csr"),
+         ("dtree", "dtree_lazy_nte"))
 BENCH_RELATIVE = "extension/algo/test/dynamic_connectivity_memory_bench"
 
 RESULT_RE = re.compile(r"^RESULT (.*)$", re.MULTILINE)
@@ -174,23 +175,25 @@ def report_case(case, results, methods):
     any_result = next(iter(results.values()))
     print(f"\n{case['name']}  ({case['mode']}, {any_result['nodes']:,} vertices, "
           f"{any_result['tree_edges']:,} tree edges, {any_result['ops']:,} updates)")
-    header = (f"{'backend':12s} {'space_n GB':>12s} {'space_e GB':>12s} {'total GB':>12s} "
-              f"{'total':>12s} {'B/node':>9s} {'nte edges':>11s}")
+    method_width = max(12, *(len(method) for method in methods))
+    header = (f"{'backend':{method_width}s} {'space_n GB':>12s} {'space_e GB':>12s} {'total GB':>12s} "
+               f"{'total':>12s} {'B/node':>9s} {'nte edges':>11s}")
     print(header)
     print("-" * len(header))
     for method in methods:
         if method not in results:
             continue
         r = results[method]
-        print(f"{method:12s} {r['space_n_gb']:>12.6f} {r['space_e_gb']:>12.6f} "
+        print(f"{method:{method_width}s} {r['space_n_gb']:>12.6f} {r['space_e_gb']:>12.6f} "
               f"{r['gb']:>12.6f} {human(r['bytes']):>12s} {r['bytes_per_node']:>9.1f} "
               f"{r['nte_edges']:>11,}")
     for base, csr in PAIRS:
         if base in results and csr in results and results[csr]["bytes"]:
             base_bytes, csr_bytes = results[base]["bytes"], results[csr]["bytes"]
             saved = 100.0 * (base_bytes - csr_bytes) / base_bytes
+            change = (f"{saved:.1f}% less" if saved >= 0 else f"{-saved:.1f}% more")
             print(f"  {base} / {csr}: {base_bytes / csr_bytes:.2f}x  "
-                  f"({saved:.1f}% less for {csr})")
+                  f"({change} for {csr})")
 
 
 def collect_cases(args, parser):
@@ -241,7 +244,8 @@ def main():
         help="filter repeated edges rather than letting the backend refuse them")
     parser.add_argument("--random", action="append", default=[], metavar="NODES,OPS,BIAS",
         help="a synthetic graph; repeatable")
-    parser.add_argument("--methods", nargs="+", default=list(METHODS), choices=METHODS)
+    parser.add_argument("--methods", nargs="+", default=list(METHODS),
+                        choices=METHODS + OPTIONAL_METHODS)
     parser.add_argument("--edges", type=int, default=0,
         help="stop after N edges, as the Python's edge_num does; 0 means all")
     parser.add_argument("--seed", type=int, default=20260917, help="--random only")

@@ -1,27 +1,4 @@
-// Randomised differential testing for the four dynamic connectivity backends.
-//
-// Each trace is replayed against all four backends simultaneously and against an
-// independent component oracle. Two things are checked after every operation:
-//
-//   1. Every backend agrees with the oracle on every vertex pair.
-//   2. The backends agree with each other -- a disagreement names which one
-//      diverged, which localises a fault to a single implementation.
-//
-// The oracle labels components once per step in O(n + m) and answers each pair in
-// O(1), so all-pairs verification stays affordable.
-//
-// Graphs are deliberately tiny. Six vertices is enough to produce bridges,
-// replacement searches that succeed and replacement searches that fail, while
-// keeping a failing trace small enough to step through by hand.
-//
-// On divergence the trace is truncated at the failing step and then greedily
-// minimised -- operations are dropped one at a time for as long as the failure
-// survives -- so the report is a minimal reproducer rather than a raw log.
-//
-// A green run means nothing unless the corpus reached the interesting code path,
-// so each shape declares floors on component merges, bridge deletions (where
-// replacement search must fail) and non-bridge deletions (where it must
-// succeed), and falls over if it stops reaching them.
+// Randomised differential testing for the dynamic connectivity backends.
 
 #include "gtest/gtest.h"
 
@@ -130,7 +107,8 @@ std::string describe(const std::vector<Op>& ops) {
 }
 
 const std::vector<std::string>& backendNames() {
-    static const std::vector<std::string> names{"dtree", "dtree_csr", "stree", "stree_csr"};
+    static const std::vector<std::string> names{
+        "dtree", "dtree_lazy_nte", "dtree_csr", "stree", "stree_csr"};
     return names;
 }
 
@@ -336,8 +314,7 @@ Op generateOp(std::mt19937& rng, const Model& model, const TraceSpec& spec, bool
     return op;
 }
 
-// Replays one trace against all four backends. Returns coverage, or fails with a
-// minimal reproducer on the first divergence.
+
 Coverage runTrace(const TraceSpec& spec, uint32_t seed) {
     SCOPED_TRACE(std::string(spec.name) + " seed=" + std::to_string(seed));
 
