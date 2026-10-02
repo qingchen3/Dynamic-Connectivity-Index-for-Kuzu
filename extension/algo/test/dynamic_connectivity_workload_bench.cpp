@@ -7,7 +7,7 @@
 //
 //   dynamic_connectivity_workload_bench <method> <workload> [options]
 //
-//   <method>    dtree | dtree_csr | stree | stree_csr
+//   <method>    dtree | dtree_lazy_nte | dtree_csr | stree | stree_csr
 //   <workload>  a file of "ins a b" / "del a b" lines, as produced for
 //               workloads/<graph>_ratio_<r>; lines with a == b are skipped,
 //               matching the Python driver
@@ -25,11 +25,8 @@
 // numbers, not a measurement of the integrated index. Driving the real storage
 // costs a graph and scan-state construction per provider call, which this does
 // not model; the provider counters below are what that work would replace.
-//
-// CORRECTNESS. The Python driver checks every method against Dtree's
-// query_simple, so Dtree itself is never checked against anything independent.
-// Here the oracle is a union-find rebuilt from the edge set, which shares no
-// code with any backend. Checking is excluded from the timings.
+
+
 
 #include "common/dynamic_connectivity_index_factory.h"
 
@@ -111,7 +108,7 @@ struct Options {
 
 [[noreturn]] void usage(const char* argv0, const std::string& why) {
     std::cerr << "error: " << why << "\n\n"
-              << "usage: " << argv0 << " <dtree|dtree_csr|stree|stree_csr> <workload> [options]\n"
+              << "usage: " << argv0 << " <dtree|dtree_lazy_nte|dtree_csr|stree|stree_csr> <workload> [options]\n"
               << "  --check=none|sampled:K|full   default none\n"
               << "  --seed=N --limit=N --label=SG --ratio=1000\n";
     std::exit(2);
