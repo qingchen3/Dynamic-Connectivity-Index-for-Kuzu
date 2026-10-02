@@ -1,9 +1,10 @@
 #include "common/dynamic_connectivity_index_factory.h"
 
-#include "common/dtree_index.h"
 #include "common/stree_index.h"
 #include "common/stree_csr_index.h"
+#include "common/dtree_index.h"
 #include "common/dtree_csr_index.h"
+#include "common/dtree_lazy_nte_index.h"
 
 #include <algorithm>
 #include <cctype>
