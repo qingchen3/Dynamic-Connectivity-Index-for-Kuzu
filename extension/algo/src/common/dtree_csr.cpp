@@ -219,6 +219,8 @@ namespace dtreeCSR_internal {
                     
                     auto it = Dtree.find(ngbrKey);
                     if(it == Dtree.end() || it->second == nullptr) throw std::runtime_error("Graph neighbor is absent from DT_nte-"); 
+                    
+                    auto* ngbrNode = it->second;
 
                     if (ngbrNode == current) { // handling of self-loops.
                         continue;
