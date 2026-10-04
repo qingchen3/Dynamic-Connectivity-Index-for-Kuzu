@@ -204,7 +204,10 @@ std::pair<STree_CSR::SNode_CSR*, STree_CSR::SNode_CSR*> STree_CSR::searchReplace
 
         for (auto ngbrKey : getNeighbors(current->key)) {
             auto ngbrNode = getNode(ngbrKey); 
-            KU_ASSERT(ngbrNode != nullptr);
+            if (ngbrNode == nullptr) {
+                throw kuzu::common::Exception(
+                    "Graph neighbor is absent from STree_CSR");
+            }
 
             if (ngbrNode == current) { // handling of self-loops.
                 continue;
