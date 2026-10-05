@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <chrono>
+#include <stdexcept>
 
 
 namespace kuzu {
@@ -254,6 +255,10 @@ void NativeDynamicConnectivityIndex::commitRelDelete(
     const bool reuseScanState =
         setting == nullptr || !(setting[0] == '0' && setting[1] == '\0');
 
+    const char* verifySetting = std::getenv("DC_VERIFY_SCAN_STATE");
+    const bool verifyScanState =
+        verifySetting != nullptr && verifySetting[0] == '1';
+
     DynamicConnectivityIndex::NeighborProvider getNeighbors =
         [this, context, &collectIncidentNs, &uniqueNeighborsNs, 
             &scanTiming, &cachedGraph, &cachedScanState, 
@@ -301,6 +306,36 @@ void NativeDynamicConnectivityIndex::commitRelDelete(
                 uniqueNeighbors.begin(), uniqueNeighbors.end()};
             uniqueNeighborsNs += std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - dedupStart).count();
+            if (reuseScanState && verifyScanState) {
+                std::unique_ptr<graph::OnDiskGraph> freshGraph;
+                std::unique_ptr<graph::NbrScanState> freshScanState;
+                IncidentScanTiming verificationTiming{};
+
+                const auto freshRels = collectIncidentRels(
+                    context, nodeOffset, freshGraph, freshScanState,
+                    verificationTiming);
+
+                std::set<DynamicConnectivityIndex::node_key_t> freshNeighbors;
+                for (const auto& edge : freshRels) {
+                    const auto neighbor =
+                        static_cast<DynamicConnectivityIndex::node_key_t>(
+                            edge.nbrOffset);
+                    if (neighbor != nodeKey) {
+                        freshNeighbors.insert(neighbor);
+                    }
+                }
+
+                const std::vector<DynamicConnectivityIndex::node_key_t> freshResult{
+                    freshNeighbors.begin(), freshNeighbors.end()};
+
+                if (result != freshResult) {
+                    std::fprintf(stderr,
+                        "DC_SCAN_MISMATCH node=%lld cached=%zu fresh=%zu\n",
+                        static_cast<long long>(nodeKey),
+                        result.size(), freshResult.size());
+                    throw std::runtime_error("Cached and fresh neighbor scans differ");
+                }
+            }
             return result;
         };
 
