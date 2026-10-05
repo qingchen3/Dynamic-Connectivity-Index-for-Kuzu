@@ -9,6 +9,7 @@
 #include <queue>
 #include <iostream>
 #include <cassert>
+#include <chrono>
 #include <limits>
 #include <stdexcept>
 
@@ -180,7 +181,11 @@ namespace dtree_internal {
             r_l = ch;
         }
 
+        const auto searchStart = std::chrono::steady_clock::now();
         std::tuple<DNode*, DNode*, DNode*> res_bfs_sel = BFS_select(r_s, diag);
+        diag.replacementSearchElapsedNs =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - searchStart).count();
         DNode* n_rs = std::get<0>(res_bfs_sel);
         DNode* n_rl = std::get<1>(res_bfs_sel);
         DNode* new_r = std::get<2>(res_bfs_sel);
