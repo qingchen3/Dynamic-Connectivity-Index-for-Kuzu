@@ -262,7 +262,7 @@ void NativeDynamicConnectivityIndex::commitRelDelete(
     DynamicConnectivityIndex::NeighborProvider getNeighbors =
         [this, context, &collectIncidentNs, &uniqueNeighborsNs, 
             &scanTiming, &cachedGraph, &cachedScanState, 
-            reuseScanState](
+            reuseScanState, verifyScanState](
             DynamicConnectivityIndex::node_key_t nodeKey) {
 
             KU_ASSERT(nodeKey >= 0);
