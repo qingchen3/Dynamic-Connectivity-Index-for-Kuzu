@@ -101,7 +101,6 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
         throw RuntimeException(
             stringFormat("Index {} is not a dynamic connectivity index.", bindData->indexName));
     }
-    auto& dcIndex = index->cast<NativeDynamicConnectivityIndex>();
     //auto srcNodeID = makeNodeID(bindData->src, bindData->nodeTableID);
     nodeID_t srcNodeID{static_cast<offset_t>(bindData->src), bindData->nodeTableID}; 
     //auto dstNodeID = makeNodeID(bindData->src, bindData->nodeTableID);
