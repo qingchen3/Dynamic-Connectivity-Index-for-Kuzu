@@ -10,6 +10,10 @@
 #include <set>
 #include <vector>
 #include <tuple>
+#include <cstdio>
+#include <cstdlib>
+#include <chrono>
+
 
 namespace kuzu {
 namespace algo_extension {
@@ -99,40 +103,63 @@ bool NativeDynamicConnectivityIndex::isBackedByRelTable(
 std::vector<NativeDynamicConnectivityIndex::IncidentRel>
 NativeDynamicConnectivityIndex::collectIncidentRels(
     main::ClientContext* context,
-    common::offset_t nodeOffset) const {
+    common::offset_t nodeOffset,
+    std::unique_ptr<graph::OnDiskGraph>& cachedGraph,
+    std::unique_ptr<graph::NbrScanState>& cachedScanState,
+    NativeDynamicConnectivityIndex::IncidentScanTiming& timing) const {
 
-    auto transaction = transaction::Transaction::Get(*context);
-    auto catalog = catalog::Catalog::Get(*context);
-    auto storageManager = storage::StorageManager::Get(*context);
+    using Clock = std::chrono::steady_clock;
+    const auto elapsedNs = [](Clock::time_point start) -> uint64_t {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(
+            Clock::now() - start).count();
+    };
 
+    // This is needed for every node, including after the first call.
     const auto nodeTableID = indexInfo.tableID;
 
-    auto relTable = storageManager
-                        ->getTable(sourceRelTableID)
-                        ->ptrCast<storage::RelTable>();
+    // Construct the graph and scan state on the first neighbor request only.
+    if (!cachedGraph) {
+        const auto setupStart = Clock::now();
 
-    const auto relGroupID = relTable->getRelGroupID();
+        auto transaction = transaction::Transaction::Get(*context);
+        auto catalog = catalog::Catalog::Get(*context);
+        auto storageManager = storage::StorageManager::Get(*context);
 
-    auto nodeEntry =
-        catalog->getTableCatalogEntry(transaction, nodeTableID);
+        auto relTable = storageManager
+                            ->getTable(sourceRelTableID)
+                            ->ptrCast<storage::RelTable>();
+        const auto relGroupID = relTable->getRelGroupID();
 
-    auto relGroupEntry =
-        catalog->getTableCatalogEntry(transaction, relGroupID);
+        auto nodeEntry =
+            catalog->getTableCatalogEntry(transaction, nodeTableID);
+        auto relGroupEntry =
+            catalog->getTableCatalogEntry(transaction, relGroupID);
 
-    graph::NativeGraphEntry graphEntry{
-        std::vector<catalog::TableCatalogEntry*>{nodeEntry},
-        std::vector<catalog::TableCatalogEntry*>{relGroupEntry}};
+        graph::NativeGraphEntry graphEntry{
+            std::vector<catalog::TableCatalogEntry*>{nodeEntry},
+            std::vector<catalog::TableCatalogEntry*>{relGroupEntry}};
 
-    graph::OnDiskGraph graph{context, std::move(graphEntry)};
+        auto newGraph = std::make_unique<graph::OnDiskGraph>(
+            context, std::move(graphEntry));
 
-    auto scanState = graph.prepareRelScan(
-        *relGroupEntry,
-        sourceRelTableID,
-        nodeTableID,
-        {common::InternalKeyword::ID},
-        true /* randomLookup */);
+        timing.graphSetupNs += elapsedNs(setupStart);
 
-    std::vector<NativeDynamicConnectivityIndex::IncidentRel> rawRels;
+        const auto prepareStart = Clock::now();
+        auto newScanState = newGraph->prepareRelScan(
+            *relGroupEntry,
+            sourceRelTableID,
+            nodeTableID,
+            {common::InternalKeyword::ID},
+            true /* randomLookup */);
+
+        timing.prepareScanNs += elapsedNs(prepareStart);
+        ++timing.prepareCalls;
+
+        cachedGraph = std::move(newGraph);
+        cachedScanState = std::move(newScanState);
+    }
+
+    std::vector<IncidentRel> rawRels;
     const common::nodeID_t nodeID{nodeOffset, nodeTableID};
 
     auto collect =
@@ -155,26 +182,34 @@ NativeDynamicConnectivityIndex::collectIncidentRels(
             }
         };
 
+    // Rebind the prepared state to this node and read forward adjacency.
+    auto phaseStart = Clock::now();
     collect(
-        graph.scanFwd(nodeID, *scanState),
+        cachedGraph->scanFwd(nodeID, *cachedScanState),
         common::RelDataDirection::FWD);
+    timing.forwardScanNs += elapsedNs(phaseStart);
 
+    // Rebind the same state and read backward adjacency.
+    phaseStart = Clock::now();
     collect(
-        graph.scanBwd(nodeID, *scanState),
+        cachedGraph->scanBwd(nodeID, *cachedScanState),
         common::RelDataDirection::BWD);
+    timing.backwardScanNs += elapsedNs(phaseStart);
+
+    phaseStart = Clock::now();
 
     using IncidenceKey = std::tuple<
         common::table_id_t,
         common::offset_t,
         common::RelDataDirection>;
-    
-    std::vector<NativeDynamicConnectivityIndex::IncidentRel> uniqueRels;
+
+    std::vector<IncidentRel> uniqueRels;
     std::set<IncidenceKey> seen;
 
-    for(const auto& edge : rawRels) {
+    for (const auto& edge : rawRels) {
         const IncidenceKey key{
-            edge.relID.offset,
             edge.relID.tableID,
+            edge.relID.offset,
             edge.direction};
 
         if (seen.insert(key).second) {
@@ -182,6 +217,7 @@ NativeDynamicConnectivityIndex::collectIncidentRels(
         }
     }
 
+    timing.relationshipDedupNs += elapsedNs(phaseStart);
     return uniqueRels;
 }
 
@@ -207,19 +243,43 @@ void NativeDynamicConnectivityIndex::commitRelDelete(
     common::offset_t dstNodeOffset,
     common::internalID_t relID) {
     KU_ASSERT(relID.tableID == sourceRelTableID);
+    
+    uint64_t collectIncidentNs = 0;
+    uint64_t uniqueNeighborsNs = 0;
+    IncidentScanTiming scanTiming{};
+
+    std::unique_ptr<graph::OnDiskGraph> cachedGraph;
+    std::unique_ptr<graph::NbrScanState> cachedScanState;
+    const char* setting = std::getenv("DC_REUSE_SCAN_STATE");
+    const bool reuseScanState =
+        setting == nullptr || !(setting[0] == '0' && setting[1] == '\0');
 
     DynamicConnectivityIndex::NeighborProvider getNeighbors =
-        [this, context](
+        [this, context, &collectIncidentNs, &uniqueNeighborsNs, 
+            &scanTiming, &cachedGraph, &cachedScanState, 
+            reuseScanState](
             DynamicConnectivityIndex::node_key_t nodeKey) {
 
             KU_ASSERT(nodeKey >= 0);
 
             const auto nodeOffset =
                 static_cast<common::offset_t>(nodeKey);
+            
+            std::unique_ptr<graph::OnDiskGraph> perCallGraph;
+            std::unique_ptr<graph::NbrScanState> perCallScanState;
 
-            const auto incidentRels =
-                collectIncidentRels(context, nodeOffset);
+            auto& graphForCall =
+                reuseScanState ? cachedGraph : perCallGraph;
+            auto& scanStateForCall =
+                reuseScanState ? cachedScanState : perCallScanState;
 
+            const auto scanStart = std::chrono::steady_clock::now();
+            const auto incidentRels = collectIncidentRels(
+                context, nodeOffset, graphForCall, scanStateForCall, scanTiming);
+            collectIncidentNs += std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - scanStart).count();
+
+            const auto dedupStart = std::chrono::steady_clock::now();
             std::set<DynamicConnectivityIndex::node_key_t>
                 uniqueNeighbors;
 
@@ -234,16 +294,49 @@ void NativeDynamicConnectivityIndex::commitRelDelete(
                 }
             }
 
-            return std::vector<
-                DynamicConnectivityIndex::node_key_t>{
-                uniqueNeighbors.begin(),
-                uniqueNeighbors.end()};
+            //return std::vector<DynamicConnectivityIndex::node_key_t>{
+            //    uniqueNeighbors.begin(),
+            //    uniqueNeighbors.end()};
+            std::vector<DynamicConnectivityIndex::node_key_t> result{
+                uniqueNeighbors.begin(), uniqueNeighbors.end()};
+            uniqueNeighborsNs += std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - dedupStart).count();
+            return result;
         };
 
     backend->deleteEdge(
         toBackendKey(srcNodeOffset),
         toBackendKey(dstNodeOffset),
         getNeighbors);
+
+    const auto diag = backend->lastDeleteDiagnostics();
+    if (diag.replacementSearchTriggered) {
+        std::fprintf(stderr,
+            "DC_STORAGE_SEARCH method=%s found=%d search_ns=%llu "
+            "get_neighbors_ns=%llu calls=%llu returned=%llu candidates=%llu\n",
+            backend->getName().c_str(),
+            diag.replacementFound ? 1 : 0,
+            static_cast<unsigned long long>(diag.replacementSearchElapsedNs),
+            static_cast<unsigned long long>(diag.getNeighborsElapsedNs),
+            static_cast<unsigned long long>(diag.getNeighborsCallCount),
+            static_cast<unsigned long long>(diag.getNeighborsReturnedIdCount),
+            static_cast<unsigned long long>(diag.replacementCandidatesScanned));
+        std::fprintf(stderr,
+            "DC_PROVIDER_PHASE method=%s collect_ns=%llu unique_ns=%llu\n",
+            backend->getName().c_str(),
+            static_cast<unsigned long long>(collectIncidentNs),
+            static_cast<unsigned long long>(uniqueNeighborsNs));
+        std::fprintf(stderr,
+            "DC_SCAN_PHASE method=%s setup_ns=%llu prepare_ns=%llu "
+            "forward_ns=%llu backward_ns=%llu rel_dedup_ns=%llu prepare_calls=%llu\n",
+            backend->getName().c_str(),
+            static_cast<unsigned long long>(scanTiming.graphSetupNs),
+            static_cast<unsigned long long>(scanTiming.prepareScanNs),
+            static_cast<unsigned long long>(scanTiming.forwardScanNs),
+            static_cast<unsigned long long>(scanTiming.backwardScanNs),
+            static_cast<unsigned long long>(scanTiming.relationshipDedupNs),
+            static_cast<unsigned long long>(scanTiming.prepareCalls));
+    }
 }
 
 void NativeDynamicConnectivityIndex::commitRelDelete(common::offset_t srcNodeOffset,
