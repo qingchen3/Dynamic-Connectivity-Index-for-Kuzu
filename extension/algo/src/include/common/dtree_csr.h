@@ -16,14 +16,25 @@ using NeighborProvider = DynamicConnectivityIndex::NeighborProvider;
 
 namespace dtreeCSR_internal {
 
+struct DNode_CSR;
+
+struct DNodeCSRKeyLess {
+    bool operator()(const DNode_CSR* a, const DNode_CSR* b) const;
+};
+
 struct DNode_CSR {
     explicit DNode_CSR(int key) : key{key} {}
 
     int key;
     int size = 1;
     DNode_CSR* parent = nullptr;
-    std::set<DNode_CSR*> children;
+    std::set<DNode_CSR*, DNodeCSRKeyLess> children;
 };
+
+inline bool DNodeCSRKeyLess::operator()(
+    const DNode_CSR* a, const DNode_CSR* b) const {
+    return a->key < b->key;
+}
 
 void insert_edge(int u, int v, std::unordered_map<int, DNode_CSR*>& Dtree);
 void delete_edge(
