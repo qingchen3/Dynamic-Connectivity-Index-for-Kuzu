@@ -52,6 +52,7 @@
 namespace {
 
 using kuzu::algo_extension::DynamicConnectivityIndex;
+using kuzu::algo_extension::DeleteDiagnostics;
 using Clock = std::chrono::steady_clock;
 using Edge = std::pair<int64_t, int64_t>;
 
@@ -201,6 +202,35 @@ struct Stats {
     double average() const { return count == 0 ? 0.0 : seconds / static_cast<double>(count); }
 };
 
+struct ReplacementSearchStats {
+    uint64_t searches = 0;
+    uint64_t replacements = 0;
+    uint64_t candidates = 0;
+    uint64_t searchNs = 0;
+    uint64_t getNeighborsNs = 0;
+    uint64_t getNeighborsCalls = 0;
+    uint64_t neighborsReturned = 0;
+
+    void add(const DeleteDiagnostics& diag) {
+        if (!diag.replacementSearchTriggered) return;
+        ++searches;
+        replacements += diag.replacementFound;
+        candidates += diag.replacementCandidatesScanned;
+        searchNs += diag.replacementSearchElapsedNs;
+        getNeighborsNs += diag.getNeighborsElapsedNs;
+        getNeighborsCalls += diag.getNeighborsCallCount;
+        neighborsReturned += diag.getNeighborsReturnedIdCount;
+    }
+
+    double searchAvgUs() const {
+        return searches == 0 ? 0.0 : static_cast<double>(searchNs) / (1000.0 * searches);
+    }
+    double getNeighborsAvgUs() const {
+        return getNeighborsCalls == 0 ? 0.0 :
+            static_cast<double>(getNeighborsNs) / (1000.0 * getNeighborsCalls);
+    }
+};
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -268,6 +298,11 @@ int main(int argc, char** argv) {
 
     Stats inserts;
     Stats deletes;
+    const bool diagnosticsAvailable = index->supportsDeleteDiagnostics();
+    // The lazy-NTE variant exposes edge-kind diagnostics but has no search timer.
+    const bool searchTimingAvailable = diagnosticsAvailable &&
+        index->getName() != "dtree_lazy_nte";
+    ReplacementSearchStats searchStats;
     uint64_t skipped = 0;
     uint64_t mismatches = 0;
     std::mt19937 rng{opt.seed};
@@ -303,6 +338,11 @@ int main(int argc, char** argv) {
             index->deleteEdge(op.u, op.v, provider);
             deletes.seconds += std::chrono::duration<double>(Clock::now() - start).count();
             ++deletes.count;
+            if (diagnosticsAvailable) {
+                // Read after the timed region. Skipped and non-tree deletions do
+                // not contribute to replacement-search averages.
+                searchStats.add(index->lastDeleteDiagnostics());
+            }
 
             oracleStale = true; // union-find cannot un-merge; rebuild on demand
         }
@@ -350,6 +390,27 @@ int main(int argc, char** argv) {
         static_cast<unsigned long long>(deletes.count), deletes.seconds, deletes.average());
     std::printf("skipped=%llu (duplicate inserts and absent deletes)\n",
         static_cast<unsigned long long>(skipped));
+    if (diagnosticsAvailable) {
+        std::printf("replacement search: count=%llu found=%llu candidates=%llu\n",
+            static_cast<unsigned long long>(searchStats.searches),
+            static_cast<unsigned long long>(searchStats.replacements),
+            static_cast<unsigned long long>(searchStats.candidates));
+        if (searchTimingAvailable) {
+            std::printf("replacement search timing: total_us=%.3f avg_us=%.3f\n",
+                static_cast<double>(searchStats.searchNs) / 1000.0,
+                searchStats.searchAvgUs());
+            std::printf("getNeighbors within search: calls=%llu returned_ids=%llu "
+                        "total_us=%.3f avg_us_per_call=%.3f\n",
+                static_cast<unsigned long long>(searchStats.getNeighborsCalls),
+                static_cast<unsigned long long>(searchStats.neighborsReturned),
+                static_cast<double>(searchStats.getNeighborsNs) / 1000.0,
+                searchStats.getNeighborsAvgUs());
+        } else {
+            std::printf("replacement search timing: unavailable for this method\n");
+        }
+    } else {
+        std::printf("replacement search: diagnostics unavailable for this method\n");
+    }
     if (providerCalls > 0) {
         std::printf("provider: calls=%llu neighbors=%llu avg_per_call=%.2f max_degree=%llu\n",
             static_cast<unsigned long long>(providerCalls),
@@ -367,11 +428,22 @@ int main(int argc, char** argv) {
 
     // One parseable line for the CSV shim.
     std::printf("RESULT method=%s graph=%s ratio=%s insertions_avg_s=%.9f deletions_avg_s=%.9f "
-                "insertions=%llu deletions=%llu mismatches=%llu\n",
+                "insertions=%llu deletions=%llu mismatches=%llu "
+                "search_diag=%d search_timing=%d searches=%llu replacements=%llu "
+                "search_avg_us=%.3f "
+                "get_neighbors_calls=%llu get_neighbors_avg_us=%.3f "
+                "neighbors_returned=%llu\n",
         opt.method.c_str(), opt.label.c_str(), opt.ratio.c_str(), inserts.average(),
         deletes.average(), static_cast<unsigned long long>(inserts.count),
         static_cast<unsigned long long>(deletes.count),
-        static_cast<unsigned long long>(mismatches));
+        static_cast<unsigned long long>(mismatches), diagnosticsAvailable ? 1 : 0,
+        searchTimingAvailable ? 1 : 0,
+        static_cast<unsigned long long>(searchStats.searches),
+        static_cast<unsigned long long>(searchStats.replacements),
+        searchStats.searchAvgUs(),
+        static_cast<unsigned long long>(searchStats.getNeighborsCalls),
+        searchStats.getNeighborsAvgUs(),
+        static_cast<unsigned long long>(searchStats.neighborsReturned));
 
     return mismatches == 0 ? 0 : 1;
 }
