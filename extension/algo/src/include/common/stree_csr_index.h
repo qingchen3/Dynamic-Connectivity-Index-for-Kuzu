@@ -40,6 +40,14 @@ public:
         return "stree_csr";
     }
 
+    bool supportsDeleteDiagnostics() const override {
+        return true;
+    }
+
+    DeleteDiagnostics lastDeleteDiagnostics() const override {
+        return stree_csr.lastDeleteDiagnostics();
+    }
+
     IndexMemoryFootprint memoryFootprint() const override {
         auto result = stree_csr.memoryFootprint();
         result.bytesNodes += sizeof(*this) - sizeof(stree_csr);

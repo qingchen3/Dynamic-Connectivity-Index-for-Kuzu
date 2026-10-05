@@ -38,6 +38,14 @@ public:
         return "dtree_csr";
     }
 
+    bool supportsDeleteDiagnostics() const override {
+        return true;
+    }
+
+    DeleteDiagnostics lastDeleteDiagnostics() const override {
+        return dtree_csr.lastDeleteDiagnostics();
+    }
+
     IndexMemoryFootprint memoryFootprint() const override {
         auto result = dtree_csr.memoryFootprint();
         result.bytesNodes += sizeof(*this) - sizeof(dtree_csr);
