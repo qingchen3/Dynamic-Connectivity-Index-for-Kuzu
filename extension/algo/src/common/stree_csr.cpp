@@ -2,6 +2,7 @@
 #include "common/stree_csr.h"
 #include "common/exception/exception.h"
 
+#include <chrono>
 #include <queue>
 #include <set>
 
@@ -130,6 +131,7 @@ void STree_CSR::deleteEdge(
     node_key_t u,
     node_key_t v,
     const NeighborProvider& getNeighbors) {
+    lastDeleteDiagnostics_ = DeleteDiagnostics{};
     auto uNode = getNode(u);
     auto vNode = getNode(v);
     if (uNode == nullptr || vNode == nullptr) {
@@ -137,6 +139,7 @@ void STree_CSR::deleteEdge(
     }
 
     if (uNode->parent != vNode && vNode->parent != uNode) {
+        lastDeleteDiagnostics_.edgeKind = DeleteDiagnostics::EdgeKind::NON_TREE;
         return;
     } else if (uNode->parent == vNode) {
         deleteTreeEdge(v, u, getNeighbors);
@@ -154,6 +157,8 @@ void STree_CSR::deleteTreeEdge(node_key_t parent, node_key_t child, const Neighb
     if (parentNode == nullptr || childNode == nullptr || childNode->parent != parentNode) {
         return;
     }
+    lastDeleteDiagnostics_.edgeKind = DeleteDiagnostics::EdgeKind::TREE;
+    lastDeleteDiagnostics_.replacementSearchTriggered = true;
 
     parentNode->children.erase(childNode);
     if (parentNode->children.size() == 1) {
@@ -183,8 +188,13 @@ void STree_CSR::deleteTreeEdge(node_key_t parent, node_key_t child, const Neighb
         grandChild->skip = nullptr;
     }
 
+    const auto searchStart = std::chrono::steady_clock::now();
     auto [connectedNode, nteNeighbor] = searchReplacement(childNode, getNeighbors);
+    lastDeleteDiagnostics_.replacementSearchElapsedNs =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - searchStart).count();
     if (nteNeighbor != nullptr) {
+        lastDeleteDiagnostics_.replacementFound = true;
         insertTreeEdge(connectedNode->key, nteNeighbor->key);
     }
 }
@@ -202,7 +212,16 @@ std::pair<STree_CSR::SNode_CSR*, STree_CSR::SNode_CSR*> STree_CSR::searchReplace
         auto current = q.front();
         q.pop();
 
-        for (auto ngbrKey : getNeighbors(current->key)) {
+        const auto getNeighborsStart = std::chrono::steady_clock::now();
+        auto neighbors = getNeighbors(current->key);
+        lastDeleteDiagnostics_.getNeighborsElapsedNs +=
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - getNeighborsStart).count();
+        ++lastDeleteDiagnostics_.getNeighborsCallCount;
+        lastDeleteDiagnostics_.getNeighborsReturnedIdCount += neighbors.size();
+
+        for (auto ngbrKey : neighbors) {
+            ++lastDeleteDiagnostics_.replacementCandidatesScanned;
             auto ngbrNode = getNode(ngbrKey); 
             if (ngbrNode == nullptr) {
                 throw kuzu::common::Exception(
