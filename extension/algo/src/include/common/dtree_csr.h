@@ -30,7 +30,8 @@ void delete_edge(
     int u, 
     int v, 
     std::unordered_map<int, DNode_CSR*>& Dtree,
-    const NeighborProvider& getNeighbors);
+    const NeighborProvider& getNeighbors,
+    DeleteDiagnostics& diag);
 
 std::pair<DNode_CSR*, DNode_CSR*> unlink(DNode_CSR* n_v);
 std::pair<DNode_CSR*, int> find_root(DNode_CSR* node);
@@ -40,12 +41,15 @@ DNode_CSR* insert_te(DNode_CSR* n_u, DNode_CSR* n_v, DNode_CSR* r_u, DNode_CSR* 
 std::pair<DNode_CSR*, DNode_CSR*> delete_te(
     DNode_CSR* n_u, 
     DNode_CSR* n_v,
-    const NeighborProvider& getNeighbors);
+    std::unordered_map<int, DNode_CSR*>& Dtree,
+    const NeighborProvider& getNeighbors,
+    DeleteDiagnostics& diag);
 
 std::tuple<DNode_CSR*, DNode_CSR*, DNode_CSR*> BFS_select(
     DNode_CSR* r,
     std::unordered_map<int, DNode_CSR*>& Dtree,
-    const NeighborProvider& getNeighbors);
+    const NeighborProvider& getNeighbors,
+    DeleteDiagnostics& diag);
 
 void cal_size(std::unordered_map<int, DNode_CSR*>& Dtree);
 
@@ -76,11 +80,13 @@ public:
     bool containsNode(node_key_t key) const;
     uint64_t getNumNodes() const;
     IndexMemoryFootprint memoryFootprint() const;
+    const DeleteDiagnostics& lastDeleteDiagnostics() const { return lastDeleteDiagnostics_; }
 private:
     static int toInternalKey(node_key_t key);
 
 private:
     std::unordered_map<int, dtreeCSR_internal::DNode_CSR*> nodes;
+    DeleteDiagnostics lastDeleteDiagnostics_;
 };
 
 } // namespace algo_extension
