@@ -8,6 +8,7 @@
 #include <queue>
 #include <iostream>
 #include <cassert>
+#include <chrono>
 #include <limits>
 #include <stdexcept>
 
@@ -148,7 +149,8 @@ namespace dtreeCSR_internal {
         DNode_CSR* n_u, 
         DNode_CSR* n_v,
         std::unordered_map<int, DNode_CSR*> &Dtree,
-        const DynamicConnectivityIndex::NeighborProvider& getNeighbors) {
+        const DynamicConnectivityIndex::NeighborProvider& getNeighbors,
+        DeleteDiagnostics& diag) {
         // determine parent and child
         DNode_CSR* ch = nullptr;
         if(n_u->parent == n_v) {
@@ -159,6 +161,9 @@ namespace dtreeCSR_internal {
             // edge does not exist as a tree edge
             return std::make_pair(n_u, n_v);
         }
+
+        diag.edgeKind = DeleteDiagnostics::EdgeKind::TREE;
+        diag.replacementSearchTriggered = true;
 
         DNode_CSR* root = nullptr;
         std::pair<DNode_CSR*, DNode_CSR*>res = unlink(ch);
@@ -176,10 +181,15 @@ namespace dtreeCSR_internal {
             r_l = ch;
         }
 
+        const auto searchStart = std::chrono::steady_clock::now();
         std::tuple<DNode_CSR*, DNode_CSR*, DNode_CSR*> res_bfs_sel = BFS_select(
             r_s, 
             Dtree, 
-            getNeighbors);
+            getNeighbors,
+            diag);
+        diag.replacementSearchElapsedNs =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - searchStart).count();
         DNode_CSR* n_rs = std::get<0>(res_bfs_sel);
         DNode_CSR* n_rl = std::get<1>(res_bfs_sel);
         DNode_CSR* new_r = std::get<2>(res_bfs_sel);
@@ -188,6 +198,7 @@ namespace dtreeCSR_internal {
             if(new_r != nullptr) r_s = reroot(new_r);   
             return std::make_pair(r_s, r_l);
         } else {
+            diag.replacementFound = true;
             return std::make_pair(insert_te(n_rs, n_rl, r_s, r_l), nullptr);
         }
     }
@@ -195,7 +206,8 @@ namespace dtreeCSR_internal {
     std::tuple<DNode_CSR*, DNode_CSR*, DNode_CSR*> BFS_select(
         DNode_CSR* r,
         std::unordered_map<int, DNode_CSR*> &Dtree,
-        const DynamicConnectivityIndex::NeighborProvider& getNeighbors) {
+        const DynamicConnectivityIndex::NeighborProvider& getNeighbors,
+        DeleteDiagnostics& diag) {
         std::queue<DNode_CSR*> q;
         q.push(r);
 
@@ -214,7 +226,16 @@ namespace dtreeCSR_internal {
                 q.pop();
                 if (current->size> S / 2 && current->size < S && new_r == nullptr) new_r = current;
                 
-                for (auto ngbrKey : getNeighbors(current->key)) {
+                const auto getNeighborsStart = std::chrono::steady_clock::now();
+                auto neighbors = getNeighbors(current->key);
+                diag.getNeighborsElapsedNs +=
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - getNeighborsStart).count();
+                ++diag.getNeighborsCallCount;
+                diag.getNeighborsReturnedIdCount += neighbors.size();
+
+                for (auto ngbrKey : neighbors) {
+                    ++diag.replacementCandidatesScanned;
                     
                     auto it = Dtree.find(ngbrKey);
                     if(it == Dtree.end() || it->second == nullptr) throw std::runtime_error("Graph neighbor is absent from DT_nte-"); 
@@ -259,7 +280,8 @@ namespace dtreeCSR_internal {
         int u, 
         int v, 
         std::unordered_map<int, DNode_CSR*> &Dtree_CSR,
-        const DynamicConnectivityIndex::NeighborProvider& getNeighbors) {
+        const DynamicConnectivityIndex::NeighborProvider& getNeighbors,
+        DeleteDiagnostics& diag) {
         if(Dtree_CSR.find(u) == Dtree_CSR.end() || Dtree_CSR.find(v) == Dtree_CSR.end()) {
             return;
         }
@@ -269,7 +291,9 @@ namespace dtreeCSR_internal {
         const bool isChild = (Dtree_CSR[u]->parent == Dtree_CSR[v]);
 
         if (isParent || isChild) {
-            delete_te(Dtree_CSR[u], Dtree_CSR[v], Dtree_CSR, getNeighbors);
+            delete_te(Dtree_CSR[u], Dtree_CSR[v], Dtree_CSR, getNeighbors, diag);
+        } else {
+            diag.edgeKind = DeleteDiagnostics::EdgeKind::NON_TREE;
         }
     }
 
@@ -325,11 +349,13 @@ void DTree_CSR::deleteEdge(
     node_key_t u,
     node_key_t v,
     const DynamicConnectivityIndex::NeighborProvider& getNeighbors) {
+    lastDeleteDiagnostics_ = DeleteDiagnostics{};
     dtreeCSR_internal::delete_edge(
         toInternalKey(u), 
         toInternalKey(v), 
         nodes,
-        getNeighbors);
+        getNeighbors,
+        lastDeleteDiagnostics_);
 }
 
 bool DTree_CSR::connected(node_key_t u, node_key_t v) const {
