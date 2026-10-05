@@ -284,12 +284,12 @@ TEST(DynamicConnectivityIndexTest, DTreeIndexDeleteDiagnostics) {
     {
         DTreeIndex index;
 
-        // In this insertion order, DTree records a non-tree connection that can
-        // be deleted through edge (1, 2).
+        // Insert two tree edges from node 1, then a non-tree edge between
+        // their children. DTree may otherwise rearrange a path on insertion.
         index.insertEdge(1, 2);
-        index.insertEdge(2, 3);
         index.insertEdge(1, 3);
-        index.deleteEdge(1, 2);
+        index.insertEdge(2, 3);
+        index.deleteEdge(2, 3);
 
         auto diag = index.lastDeleteDiagnostics();
 
@@ -305,8 +305,8 @@ TEST(DynamicConnectivityIndexTest, DTreeIndexDeleteDiagnostics) {
         // Delete a tree edge so replacement search reconnects the component
         // through an existing non-tree edge.
         index.insertEdge(1, 2);
-        index.insertEdge(2, 3);
         index.insertEdge(1, 3);
+        index.insertEdge(2, 3);
         index.deleteEdge(1, 3);
 
         auto diag = index.lastDeleteDiagnostics();
@@ -316,5 +316,59 @@ TEST(DynamicConnectivityIndexTest, DTreeIndexDeleteDiagnostics) {
         EXPECT_TRUE(diag.replacementFound);
         EXPECT_GE(diag.replacementCandidatesScanned, 1u);
         EXPECT_TRUE(index.connected(1, 3));
+    }
+}
+
+TEST(DynamicConnectivityIndexTest, FourBackendsExposeReplacementSearchDiagnostics) {
+    const std::vector<std::pair<int64_t, int64_t>> edges{{1, 2}, {1, 3}, {2, 3}};
+    for (const std::string& method : {"dtree", "dtree_csr", "stree", "stree_csr"}) {
+        SCOPED_TRACE(method);
+        bool foundTreeReplacement = false;
+        for (const auto& cut : edges) {
+            auto index = createDynamicConnectivityIndex(method);
+            ASSERT_TRUE(index->supportsDeleteDiagnostics());
+            for (const auto& [u, v] : edges) {
+                index->insertEdge(u, v);
+            }
+
+            // The provider sees the graph AFTER the base edge has been deleted.
+            auto getNeighbors = [&edges, cut](int64_t node) {
+                std::vector<int64_t> neighbors;
+                for (const auto& [u, v] : edges) {
+                    if ((u == cut.first && v == cut.second) ||
+                        (v == cut.first && u == cut.second)) {
+                        continue;
+                    }
+                    if (u == node) neighbors.push_back(v);
+                    if (v == node) neighbors.push_back(u);
+                }
+                return neighbors;
+            };
+
+            index->deleteEdge(cut.first, cut.second, getNeighbors);
+            const auto diag = index->lastDeleteDiagnostics();
+            if (!diag.replacementSearchTriggered) {
+                continue; // This cut was a non-tree edge in this backend.
+            }
+
+            EXPECT_EQ(diag.edgeKind, DeleteDiagnostics::EdgeKind::TREE);
+            EXPECT_TRUE(diag.replacementFound);
+            EXPECT_GE(diag.replacementCandidatesScanned, 1u);
+            EXPECT_GE(diag.replacementSearchElapsedNs, diag.getNeighborsElapsedNs);
+            EXPECT_TRUE(index->connected(cut.first, cut.second));
+
+            if (method == "dtree_csr" || method == "stree_csr") {
+                EXPECT_GT(diag.getNeighborsCallCount, 0u);
+                EXPECT_GE(diag.getNeighborsReturnedIdCount,
+                    diag.replacementCandidatesScanned);
+            } else {
+                EXPECT_EQ(diag.getNeighborsCallCount, 0u);
+                EXPECT_EQ(diag.getNeighborsElapsedNs, 0u);
+                EXPECT_EQ(diag.getNeighborsReturnedIdCount, 0u);
+            }
+            foundTreeReplacement = true;
+            break;
+        }
+        EXPECT_TRUE(foundTreeReplacement);
     }
 }
