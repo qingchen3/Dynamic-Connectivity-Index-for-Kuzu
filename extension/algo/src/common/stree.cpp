@@ -1,5 +1,6 @@
 #include "common/stree.h"
 
+#include <chrono>
 #include <queue>
 
 namespace kuzu {
@@ -202,7 +203,11 @@ void STree::deleteTreeEdge(node_key_t parent, node_key_t child) {
         grandChild->skip = nullptr;
     }
 
+    const auto searchStart = std::chrono::steady_clock::now();
     auto [connectedNode, nteNeighbor] = searchReplacement(childNode, lastDeleteDiagnostics_);
+    lastDeleteDiagnostics_.replacementSearchElapsedNs =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - searchStart).count();
     if (nteNeighbor != nullptr) {
         lastDeleteDiagnostics_.replacementFound = true;
         connectedNode->nte.erase(nteNeighbor);
