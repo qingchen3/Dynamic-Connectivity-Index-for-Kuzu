@@ -51,7 +51,7 @@ private:
         std::set<SNode_CSR*, SNodeKeyLess> children;
     };
 
-    inline bool STree_CSR::SNodeKeyLess::operator()(
+    inline bool SNodeKeyLess::operator()(
         const SNode_CSR* a, const SNode_CSR* b) const {
         return a->key < b->key;
     }
