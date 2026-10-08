@@ -36,14 +36,25 @@ public:
     const DeleteDiagnostics& lastDeleteDiagnostics() const { return lastDeleteDiagnostics_; }
 
 private:
+    struct SNode_CSR;
+
+    struct SNodeKeyLess {
+        bool operator()(const SNode_CSR* a, const SNode_CSR* b) const;
+    };
+
     struct SNode_CSR {
         explicit SNode_CSR(node_key_t key) : key{key} {}
 
         node_key_t key;
         SNode_CSR* parent = nullptr;
         SNode_CSR* skip = nullptr;
-        std::set<SNode_CSR*> children;
+        std::set<SNode_CSR*, SNodeKeyLess> children;
     };
+
+    inline bool STree_CSR::SNodeKeyLess::operator()(
+        const SNode_CSR* a, const SNode_CSR* b) const {
+        return a->key < b->key;
+    }
 
     SNode_CSR* getOrCreateNode(node_key_t key);
     SNode_CSR* getNode(node_key_t key) const;
