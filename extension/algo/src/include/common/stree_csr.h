@@ -51,11 +51,6 @@ private:
         std::set<SNode_CSR*, SNodeKeyLess> children;
     };
 
-    inline bool SNodeKeyLess::operator()(
-        const SNode_CSR* a, const SNode_CSR* b) const {
-        return a->key < b->key;
-    }
-
     SNode_CSR* getOrCreateNode(node_key_t key);
     SNode_CSR* getNode(node_key_t key) const;
     static SNode_CSR* findRoot(SNode_CSR* node);
@@ -74,6 +69,12 @@ private:
     std::unordered_map<node_key_t, std::unique_ptr<SNode_CSR>> nodes;
     DeleteDiagnostics lastDeleteDiagnostics_;
 };
+
+inline bool STree_CSR::SNodeKeyLess::operator()(
+    const SNode_CSR* a, const SNode_CSR* b) const {
+    return a->key < b->key;
+}
+
 
 } // namespace algo_extension
 } // namespace kuzu
