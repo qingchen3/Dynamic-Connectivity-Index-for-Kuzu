@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 """Database-backed correctness tests for BFS/WCC and the four DC indexes.
-
-Imports workload parsing and the independent Python oracle from the repository's
-existing run_dc_workload.py. Generates standard .test cases for e2e_test.
-This is NOT a performance benchmark: no timing speedups are reported.
-Python 3.9+, standard library only.
 """
 
 import argparse
@@ -13,7 +8,9 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import platform
 import random
+import socket
 import subprocess
 import sys
 import tempfile
@@ -22,6 +19,39 @@ import xml.etree.ElementTree as ET
 
 INDEX_METHODS = ("dtree", "dtree_csr", "stree", "stree_csr")
 METHODS = INDEX_METHODS + ("bfs", "wcc")
+
+
+def make_schedule(methods, repetitions, workers, order_seed):
+    """Same assignment on every host; independent of query-pair sampling."""
+    schedule = []
+    for repetition in range(1, repetitions + 1):
+        order = list(methods)
+        random.Random(f"{order_seed}:{repetition}").shuffle(order)
+        schedule.append({"repetition": repetition,
+                         "worker_id": (repetition - 1) % workers + 1,
+                         "methods": order})
+    return schedule
+
+
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def machine_metadata():
+    cpu_model = None
+    cpuinfo = Path("/proc/cpuinfo")
+    if cpuinfo.is_file():
+        for line in cpuinfo.read_text().splitlines():
+            if line.startswith("model name"):
+                cpu_model = line.partition(":")[2].strip()
+                break
+    return {"hostname": socket.gethostname(), "platform": platform.platform(),
+            "architecture": platform.machine(), "python": platform.python_version(),
+            "logical_cpus": os.cpu_count(), "cpu_model": cpu_model}
 
 
 def load_helpers(path):
@@ -254,12 +284,27 @@ def main():
     parser.add_argument("--max-deletions", type=int, default=0,
                         help="stop input at Nth deletion; 0 uses the whole trace")
     parser.add_argument("--threads", type=int, default=1)
+    parser.add_argument("--workers", type=int, default=1,
+                        help="number of machines sharing the repetition schedule")
+    parser.add_argument("--worker-id", type=int, default=1,
+                        help="this machine's worker number, from 1 to --workers")
+    parser.add_argument("--repetitions", type=int, default=1,
+                        help="total repetitions across all workers, not per worker")
+    parser.add_argument("--order-seed", type=int, default=20261009,
+                        help="method-order seed; does not change query pairs")
     parser.add_argument("--run", action="store_true")
     args = parser.parse_args()
     if min(args.marker_samples, args.query_every, args.max_deletions) < 0 or args.threads < 1:
         parser.error("counts must be non-negative and --threads must be positive")
     if "all" in args.methods and len(args.methods) != 1:
         parser.error("use --methods all by itself")
+    if args.workers < 1 or not 1 <= args.worker_id <= args.workers:
+        parser.error("--workers must be positive; --worker-id must be in 1..workers")
+    if args.repetitions < args.workers:
+        parser.error("--repetitions must be at least --workers so every machine has work")
+    methods = METHODS if args.methods == ["all"] else tuple(dict.fromkeys(args.methods))
+    schedule = make_schedule(methods, args.repetitions, args.workers, args.order_seed)
+    assigned = [entry for entry in schedule if entry["worker_id"] == args.worker_id]
     repo, workload = args.repo.resolve(), args.workload.resolve()
     helpers_path = (args.base_runner.resolve() if args.base_runner else
                     repo / "scripts/dynamic-connectivity/run_dc_workload.py")
@@ -277,18 +322,23 @@ def main():
                                    args.marker_samples, args.query_every)
     parent = repo / "test-results"
     parent.mkdir(parents=True, exist_ok=True)
-    output = Path(tempfile.mkdtemp(prefix="dc_query_baselines_", dir=parent))
+    output = Path(tempfile.mkdtemp(prefix=f"dc_query_worker{args.worker_id}_", dir=parent))
     plan_path = output / "query_pairs.jsonl"
     with plan_path.open("w") as stream:
         for check in checks + [dict(checks[-1], reason="final_after_checkpoint")]:
             stream.write(json.dumps({k: v for k, v in check.items()
                                      if k != "partition_rows"}, sort_keys=True) + "\n")
-    methods = METHODS if args.methods == ["all"] else tuple(dict.fromkeys(args.methods))
     report = {
+        "schema_version": 2, "machine": machine_metadata(),
+        "workers": args.workers, "worker_id": args.worker_id,
+        "repetitions": args.repetitions, "order_seed": args.order_seed,
+        "schedule": schedule, "assigned_repetitions": [x["repetition"] for x in assigned],
+        "methods": list(methods), "scan_state_reuse": True,
+        "script_sha256": file_sha256(Path(__file__)),
         "mode": "correctness_only", "workload": str(workload),
-        "workload_sha256": hashlib.sha256(workload.read_bytes()).hexdigest(),
-        "base_runner_sha256": hashlib.sha256(helpers_path.read_bytes()).hexdigest(),
-        "query_pairs_sha256": hashlib.sha256(plan_path.read_bytes()).hexdigest(),
+        "workload_sha256": file_sha256(workload),
+        "base_runner_sha256": file_sha256(helpers_path),
+        "query_pairs_sha256": file_sha256(plan_path),
         "query_pairs": plan_path.name, "vertices": len(vertices), "counts": counts,
         "max_deletions": args.max_deletions, "query_every": args.query_every,
         "marker_samples": args.marker_samples, "seed": args.seed, "threads": args.threads,
@@ -298,28 +348,49 @@ def main():
     }
     git = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True)
     report["commit"] = git.stdout.strip() if git.returncode == 0 else None
+    dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"],
+                           cwd=repo, capture_output=True, text=True)
+    report["tracked_files_modified"] = bool(dirty.stdout.strip()) if dirty.returncode == 0 else None
+    extension = repo / "extension/algo/build/libalgo.kuzu_extension"
+    report["binaries"] = {
+        name: {"path": str(path), "sha256": file_sha256(path) if path.is_file() else None}
+        for name, path in (("e2e_test", runner), ("algo_extension", extension))
+    }
     summary = output / "summary.json"
     print(f"Input: {counts['ins']} insertions, {counts['del']} deletions, "
           f"{counts['query']} query markers, {len(vertices)} vertices.", flush=True)
     print(f"Output: {output}", flush=True)
+    print(f"Host: {report['machine']['hostname']}; worker {args.worker_id}/{args.workers}; "
+          f"assigned repetitions: {report['assigned_repetitions']}", flush=True)
     print("Correctness only; checks at markers/final plus any --query-every interval.", flush=True)
-    for method in methods:
-        path = output / f"dc_queries_{method}.test"
-        result = generate(path, method, operations, vertices, checks, final_edges, args.threads)
-        result["status"] = "generated_not_executed"
-        report["runs"].append(result)
-        summary.write_text(json.dumps(report, indent=2) + "\n")
-        print(f"{method}: generated {result['updates']} updates, "
-              f"{result['directed_pair_queries']} pair queries, "
-              f"{result['wcc_calls']} WCC calls.", flush=True)
-        if args.run:
-            print(f"{method}: running; detailed output: {output / (method + '.log')}", flush=True)
-            result.update(run_test(repo, runner, output, method, path))
+    summary.write_text(json.dumps(report, indent=2) + "\n")
+    for entry in assigned:
+        repetition = entry["repetition"]
+        run_output = output / f"rep_{repetition:03d}"
+        run_output.mkdir()
+        print(f"Repetition {repetition}: {' -> '.join(entry['methods'])}", flush=True)
+        for position, method in enumerate(entry["methods"], 1):
+            path = run_output / f"dc_queries_{method}.test"
+            result = generate(path, method, operations, vertices, checks, final_edges, args.threads)
+            result.update(status="generated_not_executed", repetition=repetition,
+                          method_position=position, worker_id=args.worker_id,
+                          test_file=str(path.relative_to(output)))
+            report["runs"].append(result)
             summary.write_text(json.dumps(report, indent=2) + "\n")
-            print(f"{method}: {result['status'].upper()}", flush=True)
-            if result["status"] != "passed":
-                print(f"Stopped. Inspect {output / result['log']}", file=sys.stderr)
-                return 1
+            print(f"rep={repetition} {method}: generated {result['updates']} updates, "
+                  f"{result['directed_pair_queries']} pair queries, "
+                  f"{result['wcc_calls']} WCC calls.", flush=True)
+            if args.run:
+                print(f"{method}: running; detailed output: {run_output / (method + '.log')}", flush=True)
+                outcome = run_test(repo, runner, run_output, method, path)
+                for field in ("log", "xml"):
+                    outcome[field] = str((run_output / outcome[field]).relative_to(output))
+                result.update(outcome)
+                summary.write_text(json.dumps(report, indent=2) + "\n")
+                print(f"rep={repetition} {method}: {result['status'].upper()}", flush=True)
+                if result["status"] != "passed":
+                    print(f"Stopped. Inspect {output / result['log']}", file=sys.stderr)
+                    return 1
     print(f"Summary: {summary}")
     return 0
 
