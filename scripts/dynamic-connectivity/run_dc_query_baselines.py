@@ -186,10 +186,13 @@ def generate(path, method, operations, vertices, checks, final_edges, threads):
         statement("CREATE NODE TABLE Vertex(vID INT64, PRIMARY KEY(vID));")
         # Preserve the original runner's trace identity for precise replay.
         statement("CREATE REL TABLE Edges(FROM Vertex TO Vertex, eid INT64);")
-        statement("BEGIN TRANSACTION;")
-        for vertex in vertices:
-            statement(f"CREATE (:Vertex {{vID: {vertex}}});")
-        statement("COMMIT;")
+        # DC_VERTEX_SETUP_BATCHES: bound uncommitted setup state.
+        vertex_setup_batch_size = 10_000
+        for start in range(0, len(vertices), vertex_setup_batch_size):
+            statement("BEGIN TRANSACTION;")
+            for vertex in vertices[start:start + vertex_setup_batch_size]:
+                statement(f"CREATE (:Vertex {{vID: {vertex}}});")
+            statement("COMMIT;")
         if method in INDEX_METHODS:
             statement("MATCH (v:Vertex) RETURN v.vID, OFFSET(ID(v)) ORDER BY v.vID;",
                       [f"{vertex}|{offsets[vertex]}" for vertex in vertices])
@@ -232,6 +235,7 @@ def generate(path, method, operations, vertices, checks, final_edges, threads):
 
     return {
         "method": method, "updates": updates, "check_points": len(checks) + 1,
+        "vertex_setup_batch_size": vertex_setup_batch_size,
         "directed_pair_queries": directed_queries, "wcc_calls": wcc_calls,
         "partition_rows_checked": wcc_calls * len(vertices),
         "pair_answers_covered_by_partitions": (
