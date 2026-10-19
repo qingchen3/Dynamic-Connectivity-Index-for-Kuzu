@@ -1,3 +1,12 @@
+#include <atomic>
+#include <cstdio>
+#include <cstdlib>
+#include <mutex>
+#include <vector>
+
+#include "common/dc_runtime_profile.h"
+namespace dcprof = kuzu::common::dc_profile;
+
 #include "transaction/transaction.h"
 
 #include "common/exception/runtime.h"
@@ -61,15 +70,29 @@ bool Transaction::shouldForceCheckpoint() const {
 }
 
 void Transaction::commit(storage::WAL* wal) {
-    localStorage->commit();
-    undoBuffer->commit(commitTS);
+    //localStorage->commit();
+    //undoBuffer->commit(commitTS);
+    {
+        dcprof::Scope dcPhase{dcprof::Phase::LocalStorageCommit};
+        localStorage->commit();
+    }
+
+    {
+        dcprof::Scope dcPhase{dcprof::Phase::UndoCommit};
+        undoBuffer->commit(commitTS);
+    }
+
     if (shouldLogToWAL()) {
+	dcprof::Scope dcWal{dcprof::Phase::CommitWal};
+
         KU_ASSERT(localWAL && wal);
         localWAL->logCommit();
         wal->logCommittedWAL(*localWAL, clientContext);
         localWAL->clear();
     }
     if (hasCatalogChanges) {
+	dcprof::Scope dcCatalog{dcprof::Phase::CatalogPublish};
+
         Catalog::Get(*clientContext)->incrementVersion();
         hasCatalogChanges = false;
     }
@@ -220,3 +243,123 @@ Transaction DUMMY_CHECKPOINT_TRANSACTION = Transaction(TransactionType::CHECKPOI
 
 } // namespace transaction
 } // namespace kuzu
+
+// DC_RUNTIME_PROFILE_IMPLEMENTATION:
+// One shared core state for the core and extension.
+namespace kuzu::common::dc_profile {
+namespace {
+
+thread_local Record* activeRecord = nullptr;
+thread_local std::vector<Record> completedRecords;
+
+std::atomic<uint64_t> profileSequence{0};
+std::mutex profileOutputMutex;
+
+void printRecord(const Record& r) noexcept {
+    char line[16384];
+    size_t used = 0;
+    bool valid = true;
+
+    const auto append = [&](const char* format, auto... values) {
+        if (!valid) {
+            return;
+        }
+
+        const auto n =
+            std::snprintf(line + used, sizeof(line) - used, format, values...);
+
+        if (n < 0 || static_cast<size_t>(n) >= sizeof(line) - used) {
+            valid = false;
+            return;
+        }
+
+        used += static_cast<size_t>(n);
+    };
+
+    append(
+        "DC_UPDATE_PROFILE event_id=%llu parent_id=%llu "
+        "tx=%llu has_tx=%d table=%llu has_table=%d "
+        "event=%s method=%s u=%lld v=%lld kind=%s ok=%d "
+        "total_ns=%llu self_ns=%llu child_event_ns=%llu",
+        static_cast<unsigned long long>(r.id),
+        static_cast<unsigned long long>(r.parentID),
+        static_cast<unsigned long long>(r.tx),
+        r.hasTx ? 1 : 0,
+        static_cast<unsigned long long>(r.table),
+        r.hasTable ? 1 : 0,
+        r.event,
+        r.method,
+        static_cast<long long>(r.u),
+        static_cast<long long>(r.v),
+        r.kind,
+        r.ok ? 1 : 0,
+        static_cast<unsigned long long>(r.totalNs),
+        static_cast<unsigned long long>(r.selfNs),
+        static_cast<unsigned long long>(r.childEventNs));
+
+    for (uint32_t i = 0; i < phaseCount; ++i) {
+        append(
+            " %s_ns=%llu %s_self_ns=%llu %s_calls=%llu",
+            phaseNames[i],
+            static_cast<unsigned long long>(r.phases[i].ns),
+            phaseNames[i],
+            static_cast<unsigned long long>(r.phases[i].selfNs),
+            phaseNames[i],
+            static_cast<unsigned long long>(r.phases[i].calls));
+    }
+
+    for (uint32_t i = 0; i < static_cast<uint32_t>(Counter::Count); ++i) {
+        append(
+            " %s=%llu",
+            counterNames[i],
+            static_cast<unsigned long long>(r.counters[i]));
+    }
+
+    if (valid) {
+        std::fprintf(stderr, "%s\n", line);
+    } else {
+        std::fputs("DC_UPDATE_PROFILE_ERROR line_overflow\n", stderr);
+    }
+}
+
+} // namespace
+
+bool enabled() noexcept {
+    static const bool value = [] {
+        const auto* setting = std::getenv("DC_PROFILE_UPDATES");
+        return setting && setting[0] == '1' && setting[1] == '\0';
+    }();
+
+    return value;
+}
+
+Record*& current() noexcept {
+    return activeRecord;
+}
+
+uint64_t nextID() noexcept {
+    return profileSequence.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
+void finish(const Record& record, bool outermost) noexcept {
+    try {
+        completedRecords.push_back(record);
+
+        if (outermost) {
+            std::lock_guard<std::mutex> lock{profileOutputMutex};
+
+            for (const auto& item : completedRecords) {
+                printRecord(item);
+            }
+
+            completedRecords.clear();
+        }
+    } catch (...) {
+        completedRecords.clear();
+        std::fputs(
+            "DC_UPDATE_PROFILE_ERROR telemetry_allocation_failed\n",
+            stderr);
+    }
+}
+
+} // namespace kuzu::common::dc_profile

@@ -1,3 +1,6 @@
+#include "common/dc_runtime_profile.h"
+namespace dcprof = kuzu::common::dc_profile;
+
 #include "storage/table/rel_table.h"
 
 #include <algorithm>
@@ -196,9 +199,17 @@ void RelTable::checkRelMultiplicityConstraint(Transaction* transaction,
 void RelTable::insert(Transaction* transaction, TableInsertState& insertState) {
     checkRelMultiplicityConstraint(transaction, insertState);
 
+    dcprof::Event dcEvent{
+        "rel_insert", "-", -1, -1,
+        transaction->getID(), true, tableID, true};
+
     KU_ASSERT(transaction->getLocalStorage());
     const auto localTable = transaction->getLocalStorage()->getOrCreateLocalTable(*this);
-    localTable->insert(transaction, insertState);
+    // localTable->insert(transaction, insertState);
+    {
+        dcprof::Scope dcMutation{dcprof::Phase::BaseMutation};
+        localTable->insert(transaction, insertState);
+    }
     if (insertState.logToWAL && transaction->shouldLogToWAL()) {
         KU_ASSERT(transaction->isWriteTransaction());
         const auto& relInsertState = insertState.cast<RelTableInsertState>();
@@ -208,6 +219,9 @@ void RelTable::insert(Transaction* transaction, TableInsertState& insertState) {
         vectorsToLog.insert(vectorsToLog.end(), relInsertState.propertyVectors.begin(),
             relInsertState.propertyVectors.end());
         KU_ASSERT(relInsertState.srcNodeIDVector.state->getSelVector().getSelSize() == 1);
+
+	dcprof::Scope dcWal{dcprof::Phase::LocalWal};
+
         auto& wal = transaction->getLocalWAL();
         wal.logTableInsertion(tableID, TableType::REL,
             relInsertState.srcNodeIDVector.state->getSelVector().getSelSize(), vectorsToLog);
@@ -242,17 +256,23 @@ void RelTable::update(Transaction* transaction, TableUpdateState& updateState) {
 }
 
 bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) {
+    dcprof::Event dcEvent{
+        "rel_delete", "-", -1, -1,
+        transaction->getID(), true, tableID, true};
+
     const auto& relDeleteState = deleteState.cast<RelTableDeleteState>();
     KU_ASSERT(relDeleteState.relIDVector.state->getSelVector().getSelSize() == 1);
     const auto relIDPos = relDeleteState.relIDVector.state->getSelVector()[0];
-    
+
     // get complete relationship inforamtion before deletion
     const auto deletedRelID =
         relDeleteState.relIDVector
             .getValue<internalID_t>(relIDPos);
 
+    dcprof::Scope dcMutation{dcprof::Phase::BaseMutation};
+
     bool isDeleted = false;
-    
+
     //if (const auto relOffset = relDeleteState.relIDVector.readNodeOffset(relIDPos);
     const auto debugRelOffset = relDeleteState.relIDVector.readNodeOffset(relIDPos);
     KU_ASSERT(deletedRelID.offset == debugRelOffset);
@@ -274,11 +294,14 @@ bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) 
             // Buffer committed-edge deletion for rel-backed index maintenance at
             // commit. Locally inserted rels need no buffering: they never reach
             // the indexes.
+
+            dcprof::Scope dcStage{dcprof::Phase::DeleteStage};
+
             const auto srcPos = relDeleteState.srcNodeIDVector.state->getSelVector()[0];
             const auto dstPos = relDeleteState.dstNodeIDVector.state->getSelVector()[0];
             const auto srcOffset = relDeleteState.srcNodeIDVector.getValue<nodeID_t>(srcPos).offset;
             const auto dstOffset = relDeleteState.dstNodeIDVector.getValue<nodeID_t>(dstPos).offset;
-            auto& localRelTable = 
+            auto& localRelTable =
                 transaction->getLocalStorage()
                 ->getOrCreateLocalTable(*this)
                 ->cast<LocalRelTable>();
@@ -290,10 +313,14 @@ bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) 
                         deletedRelID});
         }
     }
+    dcMutation.stop();
     if (isDeleted) {
         hasChanges = true;
         if (deleteState.logToWAL && transaction->shouldLogToWAL()) {
             KU_ASSERT(transaction->isWriteTransaction());
+
+	    dcprof::Scope dcWal{dcprof::Phase::LocalWal};
+
             auto& wal = transaction->getLocalWAL();
             wal.logRelDelete(tableID, &relDeleteState.srcNodeIDVector,
                 &relDeleteState.dstNodeIDVector, &relDeleteState.relIDVector);
@@ -439,8 +466,16 @@ void RelTable::pushInsertInfo(const Transaction* transaction, RelDataDirection d
 
 void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntry,
     LocalTable* localTable) {
+
+    dcprof::Event dcEvent{
+        "rel_commit", "-", -1, -1,
+        transaction::Transaction::Get(*context)->getID(),
+        true, tableID, true};
+
+    dcprof::Scope dcDiscover{dcprof::Phase::IndexDiscover};
+
     auto& localRelTable = localTable->cast<LocalRelTable>();
-    
+
     auto& fromNodeTable = StorageManager::Get(*context)
                             ->getTable(fromNodeTableID)
                             ->cast<NodeTable>();
@@ -450,10 +485,13 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
             relBackedIndexes.push_back(indexHolder.getIndex());
         }
     }
+    dcDiscover.stop();
     // Drain pending deletes before the isEmpty early return (delete-only
     // transactions have an empty local CSR index) and before the insert scan
     // (delete-then-reinsert of the same pair must end present in the index).
     if (!relBackedIndexes.empty()) {
+	dcprof::Scope dcDispatch{dcprof::Phase::DeleteDispatch};
+
         for (const auto& [srcOffset, dstOffset, relID] : localRelTable.pendingRelDeletes) {
             for (auto* index : relBackedIndexes) {
                  index->commitRelDelete(context, srcOffset, dstOffset, relID);
@@ -465,6 +503,9 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
         localTable->clear(*MemoryManager::Get(*context));
         return;
     }
+
+    dcprof::Scope dcStorage{dcprof::Phase::RelStorageCommit};
+
     // Update relID in local storage.
     updateRelOffsets(localRelTable);
     // For both forward and backward directions, re-org local storage into compact CSR node groups.
@@ -495,12 +536,16 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
         }
     }
 
+    dcStorage.stop();
+
     if (!relBackedIndexes.empty()) {
+	dcprof::Scope dcDispatch{dcprof::Phase::InsertDispatch};
+
         for (auto& [srcOffset, rowIndices] : localRelTable.getCSRIndex(RelDataDirection::FWD)) {
             for (const auto row : rowIndices) {
                 auto [chunkedGroupIdx, rowInChunk] = StorageUtils::getQuotientRemainder(row,
                     StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
-                auto* chunkedGroup = localNodeGroup.getChunkedNodeGroup(chunkedGroupIdx); 
+                auto* chunkedGroup = localNodeGroup.getChunkedNodeGroup(chunkedGroupIdx);
                 const auto dstOffset = chunkedGroup->getColumnChunk(LOCAL_NBR_NODE_ID_COLUMN_ID)
                                            .getValue<offset_t>(rowInChunk);
                 auto& relIDColumn = chunkedGroup->getColumnChunk(LOCAL_REL_ID_COLUMN_ID);
@@ -508,12 +553,14 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
 
                 internalID_t relID {relOffset, tableID};
                 for (auto* index : relBackedIndexes) {
+	            dcprof::Scope dcCallback{dcprof::Phase::IndexCallback};
+
                     index->commitRelInsert(context, srcOffset, dstOffset, relID);
                 }
             }
         }
     }
-    
+
     localRelTable.clear(*MemoryManager::Get(*context));
 }
 
