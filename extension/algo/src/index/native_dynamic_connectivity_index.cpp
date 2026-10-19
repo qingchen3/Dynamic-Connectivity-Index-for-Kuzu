@@ -1,3 +1,6 @@
+#include "common/dc_runtime_profile.h"
+// DC_RUNTIME_PROFILE_V1
+namespace dcprof = kuzu::common::dc_profile;
 #include "index/native_dynamic_connectivity_index.h"
 #include "common/dynamic_connectivity_index_factory.h"
 #include "storage/table/rel_table.h"
@@ -15,6 +18,8 @@
 #include <chrono>
 #include <stdexcept>
 
+#include "common/dc_runtime_profile.h"
+namespace dcprof = kuzu::common::dc_profile;
 
 namespace kuzu {
 namespace algo_extension {
@@ -120,6 +125,7 @@ NativeDynamicConnectivityIndex::collectIncidentRels(
 
     // Construct the graph and scan state on the first neighbor request only.
     if (!cachedGraph) {
+        dcprof::Scope dcSetup{dcprof::Phase::GraphSetup};
         const auto setupStart = Clock::now();
 
         auto transaction = transaction::Transaction::Get(*context);
@@ -145,6 +151,8 @@ NativeDynamicConnectivityIndex::collectIncidentRels(
 
         timing.graphSetupNs += elapsedNs(setupStart);
 
+        dcSetup.stop();
+        dcprof::Scope dcPrepare{dcprof::Phase::ScanPrepare};
         const auto prepareStart = Clock::now();
         auto newScanState = newGraph->prepareRelScan(
             *relGroupEntry,
@@ -185,20 +193,25 @@ NativeDynamicConnectivityIndex::collectIncidentRels(
 
     // Rebind the prepared state to this node and read forward adjacency.
     auto phaseStart = Clock::now();
+    dcprof::Scope dcFwd{dcprof::Phase::ScanFwd};
     collect(
         cachedGraph->scanFwd(nodeID, *cachedScanState),
         common::RelDataDirection::FWD);
+    dcFwd.stop();
     timing.forwardScanNs += elapsedNs(phaseStart);
 
     // Rebind the same state and read backward adjacency.
     phaseStart = Clock::now();
+    dcprof::Scope dcBwd{dcprof::Phase::ScanBwd};
     collect(
         cachedGraph->scanBwd(nodeID, *cachedScanState),
         common::RelDataDirection::BWD);
+    dcBwd.stop();
     timing.backwardScanNs += elapsedNs(phaseStart);
 
     phaseStart = Clock::now();
 
+    dcprof::Scope dcRelDedup{dcprof::Phase::RelDedup};
     using IncidenceKey = std::tuple<
         common::table_id_t,
         common::offset_t,
@@ -284,6 +297,7 @@ void NativeDynamicConnectivityIndex::commitRelDelete(
             collectIncidentNs += std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - scanStart).count();
 
+            dcprof::Scope dcNeighborDedup{dcprof::Phase::NeighborDedup};
             const auto dedupStart = std::chrono::steady_clock::now();
             std::set<DynamicConnectivityIndex::node_key_t>
                 uniqueNeighbors;
@@ -306,6 +320,7 @@ void NativeDynamicConnectivityIndex::commitRelDelete(
                 uniqueNeighbors.begin(), uniqueNeighbors.end()};
             uniqueNeighborsNs += std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - dedupStart).count();
+            dcNeighborDedup.stop();
             if (reuseScanState && verifyScanState) {
                 std::unique_ptr<graph::OnDiskGraph> freshGraph;
                 std::unique_ptr<graph::NbrScanState> freshScanState;
@@ -345,7 +360,11 @@ void NativeDynamicConnectivityIndex::commitRelDelete(
         getNeighbors);
 
     const auto diag = backend->lastDeleteDiagnostics();
-    if (diag.replacementSearchTriggered) {
+    // DC_PRINT_SEARCH_DIAGNOSTICS: preserve existing output unless explicitly disabled.
+    const char* dcPrintSetting = std::getenv("DC_PRINT_SEARCH_DIAGNOSTICS");
+    const bool dcPrintEnabled = !dcPrintSetting ||
+        !(dcPrintSetting[0] == '0' && dcPrintSetting[1] == '\0');
+    if (!dcprof::enabled() && dcPrintEnabled && diag.replacementSearchTriggered) {
         std::fprintf(stderr,
             "DC_STORAGE_SEARCH method=%s found=%d search_ns=%llu "
             "get_neighbors_ns=%llu calls=%llu returned=%llu candidates=%llu\n",

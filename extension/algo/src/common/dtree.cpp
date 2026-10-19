@@ -13,12 +13,17 @@
 #include <limits>
 #include <stdexcept>
 
+#include "common/dc_runtime_profile.h"
+namespace dcprof = kuzu::common::dc_profile;
+
 namespace kuzu {
 namespace algo_extension {
 
 namespace dtree_internal {
 
     DNode* reroot(DNode * n_w) {
+	dcprof::Scope dcPhase{dcprof::Phase::Reroot};
+
         if (n_w->parent != nullptr) {
             DNode* ch = n_w;
             DNode* cur = ch->parent;
@@ -41,6 +46,8 @@ namespace dtree_internal {
     }
 
     DNode* link(DNode* n_u, DNode* r_u, DNode* n_v) {
+	dcprof::Scope dcPhase{dcprof::Phase::Link};
+
         n_v->parent = n_u;
         n_u->children.insert(n_v);
 
@@ -55,11 +62,13 @@ namespace dtree_internal {
         }
 
         if (new_root != nullptr) r_u = reroot(new_root);
-        
+
         return r_u;
     }
 
     std::pair<DNode*, DNode*> unlink(DNode* n_v) {
+	dcprof::Scope dcPhase{dcprof::Phase::Cut};
+
         if (n_v->parent == nullptr) {
             return std::make_pair(n_v, n_v);
         }
@@ -74,8 +83,12 @@ namespace dtree_internal {
     }
 
     std::pair<DNode*, int> find_root(DNode* node) {
+	dcprof::Scope dcPhase{dcprof::Phase::RootWalk};
+
         int dist = 0;
         while(node->parent != nullptr) {
+	    dcprof::count(dcprof::Counter::RootSteps);
+
             node = node->parent;
             dist++;
         }
@@ -83,13 +96,17 @@ namespace dtree_internal {
     }
 
     void insert_edge(int u, int v, std::unordered_map<int, DNode*> &Dtree) {
+        dcprof::Scope dcClassify{dcprof::Phase::Classify};
+        dcprof::Scope dcLookup{dcprof::Phase::NodeLookup};
 
         if (Dtree.find(u) == Dtree.end()) {
             Dtree[u] = new DNode(u);
+	    dcLookup.stop();
         }
 
         if (Dtree.find(v) == Dtree.end()) {
-            Dtree[v] = new DNode(v);    
+            Dtree[v] = new DNode(v);
+	    dcLookup.stop();
         }
 
         std::pair<DNode*, int> res_u = find_root(Dtree[u]);
@@ -99,9 +116,15 @@ namespace dtree_internal {
         DNode* r_v = res_v.first;
         int dist_v = res_v.second;
 
+	dcClassify.stop();
+
         if(r_u->key != r_v->key) {
+            dcprof::kind("tree");
+
             insert_te(Dtree[u], Dtree[v], r_u, r_v);
         } else {
+            dcprof::kind("non_tree");
+
             if (Dtree[u]->parent != Dtree[v] && Dtree[v]->parent != Dtree[u])
                 insert_nte(r_u, Dtree[u], dist_u, Dtree[v], dist_v);
         }
@@ -109,9 +132,13 @@ namespace dtree_internal {
     }
 
     void insert_nte(DNode* r, DNode* n_u, int dist_u, DNode* n_v, int dist_v) {
+	dcprof::Scope dcPhase{dcprof::Phase::NonTreePath};
+
         if (n_u->nte.find(n_v) != n_u->nte.end() && n_v->nte.find(n_u) != n_v->nte.end()) return;
 
         if (abs(dist_u - dist_v) < 2) {
+	    dcprof::Scope dcNte{dcprof::Phase::NteStorage};
+
             n_u->nte.insert(n_v);
             n_v->nte.insert(n_u);
             return;
@@ -128,8 +155,13 @@ namespace dtree_internal {
             int delta = abs(dist_u - dist_v) - 2;
             DNode* c = deep;
             for(int i = 0; i < delta; i++) c = c->parent;
+
+	    dcprof::Scope dcNte{dcprof::Phase::NteStorage};
+
             c->parent->nte.insert(c);
             c->nte.insert(c->parent);
+
+	    dcNte.stop();
 
             unlink(c);
             link(shallow, r, reroot(deep));
@@ -146,11 +178,13 @@ namespace dtree_internal {
     }
 
     void delete_nte(DNode* n_u, DNode* n_v) {
+	dcprof::Scope dcPhase{dcprof::Phase::NteStorage};
         n_u->nte.erase(n_v);
         n_v->nte.erase(n_u);
     }
 
     std::pair<DNode*, DNode*> delete_te(DNode* n_u, DNode* n_v, DeleteDiagnostics& diag) {
+	dcprof::Scope dcClassify{dcprof::Phase::Classify};
         // determine parent and child
         DNode* ch = nullptr;
         if(n_u->parent == n_v) {
@@ -161,6 +195,9 @@ namespace dtree_internal {
             // edge does not exist as a tree edge
             return std::make_pair(n_u, n_v);
         }
+
+	dcprof::kind("tree");
+	dcClassify.stop();
 
         diag.edgeKind = DeleteDiagnostics::EdgeKind::TREE;
         diag.replacementSearchTriggered = true;
@@ -175,7 +212,7 @@ namespace dtree_internal {
 
         if(ch->size < root->size) {
             r_s = ch;
-            r_l = root;        
+            r_l = root;
         } else {
             r_s = root;
             r_l = ch;
@@ -191,17 +228,29 @@ namespace dtree_internal {
         DNode* new_r = std::get<2>(res_bfs_sel);
 
         if(n_rs == nullptr && n_rl == nullptr) {
-            if(new_r != nullptr) r_s = reroot(new_r);   
+            if(new_r != nullptr) r_s = reroot(new_r);
             return std::make_pair(r_s, r_l);
         } else {
+	    dcprof::count(dcprof::Counter::ReplacementFound);
+            dcprof::Scope dcInstall{dcprof::Phase::ReplacementInstall};
+
             diag.replacementFound = true;
+
+	    dcprof::Scope dcNte{dcprof::Phase::NteStorage};
+
             n_rs->nte.erase(n_rl);
             n_rl->nte.erase(n_rs);
+
+	    dcNte.stop();
+
             return std::make_pair(insert_te(n_rs, n_rl, r_s, r_l), nullptr);
         }
     }
 
     std::tuple<DNode*, DNode*, DNode*> BFS_select(DNode* r, DeleteDiagnostics& diag) {
+	dcprof::Scope dcPhase{dcprof::Phase::Search};
+        dcprof::count(dcprof::Counter::Searches);
+
         std::queue<DNode*> q;
         q.push(r);
 
@@ -218,10 +267,16 @@ namespace dtree_internal {
                 DNode *node;
                 node = q.front();
                 q.pop();
+
+                dcprof::count(dcprof::Counter::SearchVertices);
+
                 if (node->size> S / 2 && node->size < S && new_r == nullptr) new_r = node;
 
                 if (!node->nte.empty()) {
                     for (auto it : node->nte) {
+			dcprof::Scope dcCandidate{dcprof::Phase::Candidate};
+                        dcprof::count(dcprof::Counter::Candidates);
+
                         diag.replacementCandidatesScanned++;
                         std::pair <DNode*, int> res_find_root = find_root(it);
                         DNode* rt = res_find_root.first;
@@ -243,18 +298,26 @@ namespace dtree_internal {
     }
 
     void delete_edge(int u, int v, std::unordered_map<int, DNode*> &Dtree, DeleteDiagnostics& diag) {
+	dcprof::Scope dcClassify{dcprof::Phase::Classify};
+
         if(Dtree.find(u) == Dtree.end() || Dtree.find(v) == Dtree.end()) {
             return;
         }
         if(Dtree[v]->nte.find(Dtree[u]) != Dtree[v]->nte.end() || Dtree[u]->nte.find(Dtree[v]) != Dtree[u]->nte.end()) {
+	    dcprof::kind("non_tree");
+
             diag.edgeKind = DeleteDiagnostics::EdgeKind::NON_TREE;
+
+	    dcClassify.stop();
+
             delete_nte(Dtree[u], Dtree[v]);
         } else {
+	    dcClassify.stop();
             delete_te(Dtree[u], Dtree[v], diag);
         }
     }
 
-    int query(DNode* n_u, DNode* n_v) { 
+    int query(DNode* n_u, DNode* n_v) {
         DNode* d_u = nullptr;
 
         while (n_u->parent != nullptr) {
@@ -300,10 +363,14 @@ int DTree::toInternalKey(node_key_t key) {
 }
 
 void DTree::insertEdge(node_key_t u, node_key_t v) {
+    dcprof::Event dcEvent{"index_insert", "dtree", u, v};
+
     dtree_internal::insert_edge(toInternalKey(u), toInternalKey(v), nodes);
 }
 
 void DTree::deleteEdge(node_key_t u, node_key_t v) {
+    dcprof::Event dcEvent{"index_delete", "dtree", u, v};
+
     lastDeleteDiagnostics_ = DeleteDiagnostics{};
     dtree_internal::delete_edge(toInternalKey(u), toInternalKey(v), nodes, lastDeleteDiagnostics_);
 }
@@ -338,17 +405,17 @@ IndexMemoryFootprint DTree::memoryFootprint() const {
             (memory_footprint_detail::mapNodeBytes<int, Node*>() +
             sizeof(Node));
 
-    const auto setNodeBytes = 
+    const auto setNodeBytes =
         memory_footprint_detail::setNodeBytes<Node*>();
-    
+
     for (const auto& [key, node] : nodes) {
         result.numTreeEdges += node->children.size();
         result.numNonTreeEdges += node->nte.size();
     }
 
-    result.bytesEdges = 
+    result.bytesEdges =
         (result.numTreeEdges + result.numNonTreeEdges) * setNodeBytes;
-    
+
     result.numNonTreeEdges /= 2;
     return result;
 }
