@@ -101,13 +101,13 @@ namespace dtree_internal {
 
         if (Dtree.find(u) == Dtree.end()) {
             Dtree[u] = new DNode(u);
-	    dcLookup.stop();
         }
 
         if (Dtree.find(v) == Dtree.end()) {
             Dtree[v] = new DNode(v);
-	    dcLookup.stop();
         }
+
+	dcLookup.stop();
 
         std::pair<DNode*, int> res_u = find_root(Dtree[u]);
         DNode* r_u = res_u.first;
