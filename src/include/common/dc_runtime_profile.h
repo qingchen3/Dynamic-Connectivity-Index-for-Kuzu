@@ -16,6 +16,8 @@ enum class Phase : uint32_t {
     RelDedup, NeighborDedup, BaseMutation, DeleteStage, LocalWal, IndexDiscover,
     DeleteDispatch, InsertDispatch, RelStorageCommit, IndexCallback, LocalStorageCommit,
     UndoCommit, CommitWal, CatalogPublish, CommitLockWait, ClientCleanup, Checkpoint,
+    PrepareSchema, PrepareNodeVectors, PrepareProperties, PreparePredicate,
+    PrepareDirection, PrepareStorageState, PrepareBind, ScanInit,
     Count
 };
 inline constexpr const char* phaseNames[] = {
@@ -23,7 +25,9 @@ inline constexpr const char* phaseNames[] = {
     "search", "replacement_install", "candidate", "provider", "graph_setup", "scan_prepare", "scan_fwd", "scan_bwd",
     "rel_dedup", "neighbor_dedup", "base_mutation", "delete_stage", "local_wal", "index_discover",
     "delete_dispatch", "insert_dispatch", "rel_storage_commit", "index_callback", "local_storage_commit",
-    "undo_commit", "commit_wal", "catalog_publish", "commit_lock_wait", "client_cleanup", "checkpoint"
+    "undo_commit", "commit_wal", "catalog_publish", "commit_lock_wait", "client_cleanup", "checkpoint",
+    "prepare_schema", "prepare_node_vectors", "prepare_properties", "prepare_predicate",
+    "prepare_direction", "prepare_storage_state", "prepare_bind", "scan_init"
 };
 inline constexpr uint32_t phaseCount = static_cast<uint32_t>(Phase::Count);
 static_assert(sizeof(phaseNames) / sizeof(*phaseNames) == phaseCount);
