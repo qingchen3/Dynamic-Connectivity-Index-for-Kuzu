@@ -1,6 +1,3 @@
-#include "common/dc_runtime_profile.h"
-// DC_RUNTIME_PROFILE_V1
-namespace dcprof = kuzu::common::dc_profile;
 #include <set>
 #include <cstdlib>
 #include <climits>

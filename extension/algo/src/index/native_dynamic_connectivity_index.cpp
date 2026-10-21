@@ -1,6 +1,3 @@
-#include "common/dc_runtime_profile.h"
-// DC_RUNTIME_PROFILE_V1
-namespace dcprof = kuzu::common::dc_profile;
 #include "index/native_dynamic_connectivity_index.h"
 #include "common/dynamic_connectivity_index_factory.h"
 #include "storage/table/rel_table.h"

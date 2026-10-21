@@ -1,6 +1,3 @@
-#include "common/dc_runtime_profile.h"
-// DC_RUNTIME_PROFILE_V1
-namespace dcprof = kuzu::common::dc_profile;
 #include "common/assert.h"
 #include "common/stree_csr.h"
 #include "common/exception/exception.h"
