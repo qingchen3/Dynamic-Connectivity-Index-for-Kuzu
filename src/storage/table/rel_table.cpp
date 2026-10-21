@@ -493,6 +493,9 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
 	dcprof::Scope dcDispatch{dcprof::Phase::DeleteDispatch};
 
         for (const auto& [srcOffset, dstOffset, relID] : localRelTable.pendingRelDeletes) {
+
+            dcprof::Scope dcCallback{dcprof::Phase::IndexCallback};
+
             for (auto* index : relBackedIndexes) {
                  index->commitRelDelete(context, srcOffset, dstOffset, relID);
             }
