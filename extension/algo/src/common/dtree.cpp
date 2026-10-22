@@ -46,7 +46,7 @@ namespace dtree_internal {
     }
 
     DNode* link(DNode* n_u, DNode* r_u, DNode* n_v) {
-	dcprof::Scope dcPhase{dcprof::Phase::Link};
+	    dcprof::Scope dcPhase{dcprof::Phase::Link};
 
         n_v->parent = n_u;
         n_u->children.insert(n_v);
@@ -67,7 +67,7 @@ namespace dtree_internal {
     }
 
     std::pair<DNode*, DNode*> unlink(DNode* n_v) {
-	dcprof::Scope dcPhase{dcprof::Phase::Cut};
+	    dcprof::Scope dcPhase{dcprof::Phase::Cut};
 
         if (n_v->parent == nullptr) {
             return std::make_pair(n_v, n_v);
@@ -83,7 +83,7 @@ namespace dtree_internal {
     }
 
     std::pair<DNode*, int> find_root(DNode* node) {
-	dcprof::Scope dcPhase{dcprof::Phase::RootWalk};
+	    dcprof::Scope dcPhase{dcprof::Phase::RootWalk};
 
         int dist = 0;
         while(node->parent != nullptr) {
@@ -107,7 +107,7 @@ namespace dtree_internal {
             Dtree[v] = new DNode(v);
         }
 
-	dcLookup.stop();
+	    dcLookup.stop();
 
         std::pair<DNode*, int> res_u = find_root(Dtree[u]);
         DNode* r_u = res_u.first;
@@ -116,7 +116,7 @@ namespace dtree_internal {
         DNode* r_v = res_v.first;
         int dist_v = res_v.second;
 
-	dcClassify.stop();
+	    dcClassify.stop();
 
         if(r_u->key != r_v->key) {
             dcprof::kind("tree");
@@ -132,7 +132,7 @@ namespace dtree_internal {
     }
 
     void insert_nte(DNode* r, DNode* n_u, int dist_u, DNode* n_v, int dist_v) {
-	dcprof::Scope dcPhase{dcprof::Phase::NonTreePath};
+	    dcprof::Scope dcPhase{dcprof::Phase::NonTreePath};
 
         if (n_u->nte.find(n_v) != n_u->nte.end() && n_v->nte.find(n_u) != n_v->nte.end()) return;
 
@@ -156,7 +156,7 @@ namespace dtree_internal {
             DNode* c = deep;
             for(int i = 0; i < delta; i++) c = c->parent;
 
-	    dcprof::Scope dcNte{dcprof::Phase::NteStorage};
+	        dcprof::Scope dcNte{dcprof::Phase::NteStorage};
 
             c->parent->nte.insert(c);
             c->nte.insert(c->parent);
@@ -178,13 +178,13 @@ namespace dtree_internal {
     }
 
     void delete_nte(DNode* n_u, DNode* n_v) {
-	dcprof::Scope dcPhase{dcprof::Phase::NteStorage};
+	    dcprof::Scope dcPhase{dcprof::Phase::NteStorage};
         n_u->nte.erase(n_v);
         n_v->nte.erase(n_u);
     }
 
     std::pair<DNode*, DNode*> delete_te(DNode* n_u, DNode* n_v, DeleteDiagnostics& diag) {
-	dcprof::Scope dcClassify{dcprof::Phase::Classify};
+	    dcprof::Scope dcClassify{dcprof::Phase::Classify};
         // determine parent and child
         DNode* ch = nullptr;
         if(n_u->parent == n_v) {
@@ -196,8 +196,8 @@ namespace dtree_internal {
             return std::make_pair(n_u, n_v);
         }
 
-	dcprof::kind("tree");
-	dcClassify.stop();
+	    dcprof::kind("tree");
+	    dcClassify.stop();
 
         diag.edgeKind = DeleteDiagnostics::EdgeKind::TREE;
         diag.replacementSearchTriggered = true;
@@ -231,24 +231,24 @@ namespace dtree_internal {
             if(new_r != nullptr) r_s = reroot(new_r);
             return std::make_pair(r_s, r_l);
         } else {
-	    dcprof::count(dcprof::Counter::ReplacementFound);
+	        dcprof::count(dcprof::Counter::ReplacementFound);
             dcprof::Scope dcInstall{dcprof::Phase::ReplacementInstall};
 
             diag.replacementFound = true;
 
-	    dcprof::Scope dcNte{dcprof::Phase::NteStorage};
+	        dcprof::Scope dcNte{dcprof::Phase::NteStorage};
 
             n_rs->nte.erase(n_rl);
             n_rl->nte.erase(n_rs);
 
-	    dcNte.stop();
+	        dcNte.stop();
 
             return std::make_pair(insert_te(n_rs, n_rl, r_s, r_l), nullptr);
         }
     }
 
     std::tuple<DNode*, DNode*, DNode*> BFS_select(DNode* r, DeleteDiagnostics& diag) {
-	dcprof::Scope dcPhase{dcprof::Phase::Search};
+	    dcprof::Scope dcPhase{dcprof::Phase::Search};
         dcprof::count(dcprof::Counter::Searches);
 
         std::queue<DNode*> q;
@@ -274,7 +274,7 @@ namespace dtree_internal {
 
                 if (!node->nte.empty()) {
                     for (auto it : node->nte) {
-			dcprof::Scope dcCandidate{dcprof::Phase::Candidate};
+			            dcprof::Scope dcCandidate{dcprof::Phase::Candidate};
                         dcprof::count(dcprof::Counter::Candidates);
 
                         diag.replacementCandidatesScanned++;
@@ -298,7 +298,7 @@ namespace dtree_internal {
     }
 
     void delete_edge(int u, int v, std::unordered_map<int, DNode*> &Dtree, DeleteDiagnostics& diag) {
-	dcprof::Scope dcClassify{dcprof::Phase::Classify};
+	    dcprof::Scope dcClassify{dcprof::Phase::Classify};
 
         if(Dtree.find(u) == Dtree.end() || Dtree.find(v) == Dtree.end()) {
             return;
