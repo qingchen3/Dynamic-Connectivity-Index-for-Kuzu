@@ -6,6 +6,7 @@ add_library(algo_extension_common
         stree_csr.cpp
         dtree.cpp
         dtree_csr.cpp
+        dtree_lazy_nte.cpp
         dynamic_connectivity_index_factory.cpp
         )
 

@@ -1,3 +1,6 @@
+#include "common/dc_runtime_profile.h"
+namespace dcprof = kuzu::common::dc_profile;
+
 #include "transaction/transaction_manager.h"
 
 #include <thread>
@@ -54,8 +57,26 @@ Transaction* TransactionManager::beginTransaction(main::ClientContext& clientCon
 }
 
 void TransactionManager::commit(main::ClientContext& clientContext, Transaction* transaction) {
+    dcprof::Event dcEvent{
+        "commit",
+        "-",
+        -1,
+        -1,
+        transaction->getID(),
+        true,
+        0,
+        false,
+        transaction->isWriteTransaction()};
+
+    dcprof::Scope dcLockWait{dcprof::Phase::CommitLockWait};
+
     std::unique_lock lck{mtxForSerializingPublicFunctionCalls};
-    clientContext.cleanUp();
+
+    dcLockWait.stop();
+    {
+        dcprof::Scope dcCleanup{dcprof::Phase::ClientCleanup};
+        clientContext.cleanUp();
+    }
     switch (transaction->getType()) {
     case TransactionType::READ_ONLY: {
         clearTransactionNoLock(transaction->getID());
@@ -69,6 +90,7 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
                                 Checkpointer::canAutoCheckpoint(clientContext, *transaction);
         clearTransactionNoLock(transaction->getID());
         if (shouldCheckpoint) {
+            dcprof::Scope dcCheckpoint{dcprof::Phase::Checkpoint};
             checkpointNoLock(clientContext);
         }
     } break;

@@ -155,7 +155,7 @@ struct DeleteDiagnosticsSummary {
 
 void printUsage(const char* programName) {
     std::cerr << "Usage:\n"
-              << "  " << programName << " <stree|dtree> <trace_file> [--validate=expected|--validate=none]\n\n"
+              << "  " << programName << " <stree|dtree|dtree_lazy_nte> <trace_file> [--validate=expected|--validate=none]\n\n"
               << "Trace format:\n"
               << "  OP u v [expected_connected]\n\n"
               << "Examples:\n"
@@ -243,7 +243,7 @@ int main(int argc, char** argv) {
             processedOps++;
         } else if (isDeleteOp(op.op)) {
             auto start = std::chrono::steady_clock::now();
-            index->deleteEdge(op.u, op.v);
+            index->deleteEdge(op.u, op.v, {});
             auto end = std::chrono::steady_clock::now();
 
             if (index->supportsDeleteDiagnostics()) {

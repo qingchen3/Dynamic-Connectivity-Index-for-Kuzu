@@ -48,6 +48,12 @@ public:
         return true;
     }
 
+    IndexMemoryFootprint memoryFootprint() const override {
+        auto result = dtree.memoryFootprint();
+        result.bytesNodes += sizeof(*this) - sizeof(dtree);
+        return result;
+    }
+
     DeleteDiagnostics lastDeleteDiagnostics() const override {
         return dtree.lastDeleteDiagnostics();
     }

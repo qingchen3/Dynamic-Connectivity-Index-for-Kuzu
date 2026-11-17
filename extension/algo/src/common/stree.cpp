@@ -1,11 +1,17 @@
 #include "common/stree.h"
 
+#include <chrono>
 #include <queue>
+
+#include "common/dc_runtime_profile.h"
+namespace dcprof = kuzu::common::dc_profile;
 
 namespace kuzu {
 namespace algo_extension {
 
 STree::SNode* STree::getOrCreateNode(node_key_t key) {
+    dcprof::Scope dcPhase{dcprof::Phase::NodeLookup};
+
     auto [it, inserted] = nodes.try_emplace(key, nullptr);
     if (inserted) {
         it->second = std::make_unique<SNode>(key);
@@ -14,6 +20,8 @@ STree::SNode* STree::getOrCreateNode(node_key_t key) {
 }
 
 STree::SNode* STree::getNode(node_key_t key) const {
+    dcprof::Scope dcPhase{dcprof::Phase::NodeLookup};
+
     auto it = nodes.find(key);
     return it == nodes.end() ? nullptr : it->second.get();
 }
@@ -27,28 +35,41 @@ uint64_t STree::getNumNodes() const {
 }
 
 STree::SNode* STree::findRoot(SNode* node) {
+    dcprof::Scope dcPhase{dcprof::Phase::RootWalk};
+
     while (node->parent != nullptr) {
+        dcprof::count(dcprof::Counter::RootSteps);
         node = node->skip != nullptr ? node->skip : node->parent;
     }
     return node;
 }
 
 void STree::insertEdge(node_key_t u, node_key_t v) {
+    dcprof::Event dcEvent{"index_insert", "stree", u, v};
+    dcprof::Scope dcClassify{dcprof::Phase::Classify};
+
     auto uNode = getOrCreateNode(u);
     auto vNode = getOrCreateNode(v);
 
     if (uNode->parent == vNode || vNode->parent == uNode || uNode->nte.contains(vNode)) {
+        dcprof::kind("duplicate");
         return;
     }
 
     if (findRoot(uNode) == findRoot(vNode)) {
+        dcClassify.stop();
+        dcprof::kind("non_tree");
         insertNonTreeEdge(u, v);
     } else {
+        dcClassify.stop();
+        dcprof::kind("tree");
         insertTreeEdge(u, v);
     }
 }
 
 void STree::insertNonTreeEdge(node_key_t u, node_key_t v) {
+    dcprof::Scope dcPhase{dcprof::Phase::NteStorage};
+
     auto uNode = getOrCreateNode(u);
     auto vNode = getOrCreateNode(v);
     uNode->nte.insert(vNode);
@@ -56,6 +77,8 @@ void STree::insertNonTreeEdge(node_key_t u, node_key_t v) {
 }
 
 void STree::insertTreeEdge(node_key_t u, node_key_t v) {
+    dcprof::Scope dcPhase{dcprof::Phase::Link};
+
     auto ch = reroot(getOrCreateNode(u));
     auto vNode = getOrCreateNode(v);
     ch->parent = vNode;
@@ -85,6 +108,8 @@ void STree::insertTreeEdge(node_key_t u, node_key_t v) {
 }
 
 STree::SNode* STree::reroot(SNode* node) {
+    dcprof::Scope dcPhase{dcprof::Phase::Reroot};
+
     if (node->parent == nullptr) {
         node->skip = nullptr;
         return node;
@@ -133,6 +158,9 @@ STree::SNode* STree::reroot(SNode* node) {
 }
 
 void STree::deleteEdge(node_key_t u, node_key_t v) {
+    dcprof::Event dcEvent{"index_delete", "stree", u, v};
+    dcprof::Scope dcClassify{dcprof::Phase::Classify};
+
     lastDeleteDiagnostics_ = DeleteDiagnostics{};
 
     auto uNode = getNode(u);
@@ -141,20 +169,26 @@ void STree::deleteEdge(node_key_t u, node_key_t v) {
         return;
     }
     if (uNode->nte.contains(vNode)) {
+        dcprof::kind("non_tree");
         lastDeleteDiagnostics_.edgeKind = DeleteDiagnostics::EdgeKind::NON_TREE;
+        dcClassify.stop();
         deleteNonTreeEdge(u, v);
         return;
     }
     if (uNode->parent == vNode) {
+        dcClassify.stop();
         deleteTreeEdge(v, u);
         return;
     }
     if (vNode->parent == uNode) {
+        dcClassify.stop();
         deleteTreeEdge(u, v);
     }
 }
 
 void STree::deleteNonTreeEdge(node_key_t u, node_key_t v) {
+    dcprof::Scope dcPhase{dcprof::Phase::NteStorage};
+
     auto uNode = getNode(u);
     auto vNode = getNode(v);
     if (uNode == nullptr || vNode == nullptr) {
@@ -165,6 +199,8 @@ void STree::deleteNonTreeEdge(node_key_t u, node_key_t v) {
 }
 
 void STree::deleteTreeEdge(node_key_t parent, node_key_t child) {
+    dcprof::Scope dcClassify{dcprof::Phase::Classify};
+
     auto parentNode = getNode(parent);
     auto childNode = getNode(child);
     if (parentNode == nullptr || childNode == nullptr || childNode->parent != parentNode) {
@@ -174,6 +210,9 @@ void STree::deleteTreeEdge(node_key_t parent, node_key_t child) {
     lastDeleteDiagnostics_.edgeKind = DeleteDiagnostics::EdgeKind::TREE;
     lastDeleteDiagnostics_.replacementSearchTriggered = true;
 
+    dcClassify.stop();
+    dcprof::kind("tree");
+    dcprof::Scope dcCut{dcprof::Phase::Cut};
     parentNode->children.erase(childNode);
     if (parentNode->children.size() == 1) {
         auto temp = parentNode;
@@ -202,17 +241,29 @@ void STree::deleteTreeEdge(node_key_t parent, node_key_t child) {
         grandChild->skip = nullptr;
     }
 
+    dcCut.stop();
+    const auto searchStart = std::chrono::steady_clock::now();
     auto [connectedNode, nteNeighbor] = searchReplacement(childNode, lastDeleteDiagnostics_);
+    lastDeleteDiagnostics_.replacementSearchElapsedNs =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - searchStart).count();
     if (nteNeighbor != nullptr) {
+        dcprof::Scope dcInstall{dcprof::Phase::ReplacementInstall};
+        dcprof::count(dcprof::Counter::ReplacementFound);
         lastDeleteDiagnostics_.replacementFound = true;
+        dcprof::Scope dcNte{dcprof::Phase::NteStorage};
         connectedNode->nte.erase(nteNeighbor);
         nteNeighbor->nte.erase(connectedNode);
+        dcNte.stop();
         insertTreeEdge(connectedNode->key, nteNeighbor->key);
     }
 }
 
 std::pair<STree::SNode*, STree::SNode*> STree::searchReplacement(
     SNode* startNode, DeleteDiagnostics& diag) {
+    dcprof::Scope dcPhase{dcprof::Phase::Search};
+    dcprof::count(dcprof::Counter::Searches);
+
     if (startNode == nullptr) {
         return {nullptr, nullptr};
     }
@@ -222,7 +273,10 @@ std::pair<STree::SNode*, STree::SNode*> STree::searchReplacement(
     while (!q.empty()) {
         auto current = q.front();
         q.pop();
+        dcprof::count(dcprof::Counter::SearchVertices);
         for (auto nteNeighbor : current->nte) {
+            dcprof::Scope dcCandidate{dcprof::Phase::Candidate};
+            dcprof::count(dcprof::Counter::Candidates);
             diag.replacementCandidatesScanned++;
             if (findRoot(nteNeighbor) != startNode) {
                 return {current, nteNeighbor};
@@ -242,6 +296,34 @@ bool STree::connected(node_key_t u, node_key_t v) const {
         return false;
     }
     return findRoot(uNode) == findRoot(vNode);
+}
+
+IndexMemoryFootprint STree::memoryFootprint() const {
+    IndexMemoryFootprint result;
+    result.numNodes = nodes.size();
+
+    result.bytesNodes =
+        sizeof(*this) +
+        memory_footprint_detail::mapBucketBytes<
+            node_key_t, std::unique_ptr<SNode>>(
+            nodes.bucket_count(), nodes.size()) +
+        nodes.size() *
+            (memory_footprint_detail::mapNodeBytes<
+                 node_key_t, std::unique_ptr<SNode>>() +
+             sizeof(SNode));
+
+    const auto setNodeBytes =
+        memory_footprint_detail::setNodeBytes<SNode*>();
+
+    for (const auto& [key, node] : nodes) {
+        result.numTreeEdges += node->children.size();
+        result.numNonTreeEdges += node->nte.size();
+    }
+
+    result.bytesEdges =
+        (result.numTreeEdges + result.numNonTreeEdges) * setNodeBytes;
+    result.numNonTreeEdges /= 2;
+    return result;
 }
 
 } // namespace algo_extension

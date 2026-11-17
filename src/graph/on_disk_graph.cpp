@@ -21,6 +21,10 @@
 #include "storage/table/node_table.h"
 #include "storage/table/rel_table.h"
 
+#include "common/dc_runtime_profile.h"
+
+namespace dcprof = kuzu::common::dc_profile;
+
 using namespace kuzu::catalog;
 using namespace kuzu::storage;
 using namespace kuzu::main;
@@ -88,15 +92,27 @@ OnDiskGraphNbrScanState::OnDiskGraphNbrScanState(ClientContext* context,
 OnDiskGraphNbrScanState::OnDiskGraphNbrScanState(ClientContext* context,
     const TableCatalogEntry& entry, oid_t relTableID, std::shared_ptr<Expression> predicate,
     std::vector<std::string> relProperties, bool randomLookup) {
+
+    dcprof::Scope dcSchema{dcprof::Phase::PrepareSchema};
+
     auto predicateProps = getProperties(predicate);
     auto schema = getSchema(predicateProps);
     auto mm = MemoryManager::Get(*context);
     auto resultSet = getResultSet(&schema, mm);
     KU_ASSERT(resultSet.dataChunks.size() == 1);
     auto state = resultSet.getDataChunk(0)->state;
+
+    dcSchema.stop();
+    dcprof::Scope dcVectors{dcprof::Phase::PrepareNodeVectors};
+
     srcNodeIDVector = getValueVector(LogicalType::INTERNAL_ID(), mm, state);
     srcNodeIDVector->state = DataChunkState::getSingleValueDataChunkState();
     dstNodeIDVector = getValueVector(LogicalType::INTERNAL_ID(), mm, state);
+
+    dcVectors.stop();
+    // Resolve requested properties and allocate their vectors.
+    dcprof::Scope dcProperties{dcprof::Phase::PrepareProperties};
+
     propertyVectors.valueVectors.resize(relProperties.size());
     // TODO(bmwinger): If there are both a predicate and a custom edgePropertyIndex, they will
     // currently be scanned twice. The propertyVector could simply be one of the vectors used
@@ -110,13 +126,22 @@ OnDiskGraphNbrScanState::OnDiskGraphNbrScanState(ClientContext* context,
         KU_ASSERT(relPropertyColumnIDs[i] != INVALID_COLUMN_ID);
         propertyVectors.valueVectors[i] = getValueVector(property.getType(), mm, state);
     }
+
+    dcProperties.stop();
+
     if (predicate != nullptr) {
+
+        dcprof::Scope dcPredicate{dcprof::Phase::PreparePredicate};
+
         auto mapper = ExpressionMapper(&schema);
         relPredicateEvaluator = mapper.getEvaluator(predicate);
         relPredicateEvaluator->init(resultSet, context);
     }
     auto table = StorageManager::Get(*context)->getTable(relTableID)->ptrCast<RelTable>();
     for (auto dataDirection : entry.constCast<RelGroupCatalogEntry>().getRelDataDirections()) {
+
+        dcprof::Scope dcDirection{dcprof::Phase::PrepareDirection};
+
         auto columnIDs = getColumnIDs(predicateProps, entry, relPropertyColumnIDs);
         std::vector outVectors{dstNodeIDVector.get()};
         for (auto i = 0u; i < propertyVectors.getNumValueVectors(); i++) {
@@ -126,10 +151,23 @@ OnDiskGraphNbrScanState::OnDiskGraphNbrScanState(ClientContext* context,
             auto pos = DataPos(schema.getExpressionPos(*property));
             outVectors.push_back(resultSet.getValueVector(pos).get());
         }
+
+        dcprof::Scope dcStorageState{
+            dcprof::Phase::PrepareStorageState};
+
         auto scanState = std::make_unique<RelTableScanState>(*MemoryManager::Get(*context),
             srcNodeIDVector.get(), outVectors, dstNodeIDVector->state, randomLookup);
+
+        dcStorageState.stop();
+
+        // Bind this state to a table, transaction and direction.
+        dcprof::Scope dcBind{dcprof::Phase::PrepareBind};
+
         scanState->setToTable(transaction::Transaction::Get(*context), table, columnIDs, {},
             dataDirection);
+
+        dcBind.stop();
+
         directedIterators.emplace_back(context, table, std::move(scanState));
     }
 }
@@ -270,6 +308,9 @@ OnDiskGraphNbrScanState::InnerIterator::InnerIterator(const ClientContext* conte
     : context{context}, relTable{relTable}, tableScanState{std::move(tableScanState)} {}
 
 void OnDiskGraphNbrScanState::InnerIterator::initScan() const {
+
+    dcprof::Scope dcInit{dcprof::Phase::ScanInit};
+
     relTable->initScanState(transaction::Transaction::Get(*context), *tableScanState);
 }
 

@@ -1,0 +1,6 @@
+method,s
+dtree,1.729411751
+dtree_csr,1.282376856
+stree,1.803917564
+stree_csr,1.356882669
+dtree_lazy_nte,1.356882684

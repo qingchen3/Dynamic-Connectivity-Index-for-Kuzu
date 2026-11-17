@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include "common/dynamic_connectivity_index.h"
+#include "common/dc_index_memory_footprint.h"
 
 namespace kuzu {
 namespace algo_extension {
@@ -31,15 +32,23 @@ public:
     bool connected(node_key_t u, node_key_t v) const;
     bool containsNode(node_key_t key) const;
     uint64_t getNumNodes() const;
+    IndexMemoryFootprint memoryFootprint() const;
+    const DeleteDiagnostics& lastDeleteDiagnostics() const { return lastDeleteDiagnostics_; }
 
 private:
+    struct SNode_CSR;
+
+    struct SNodeKeyLess {
+        bool operator()(const SNode_CSR* a, const SNode_CSR* b) const;
+    };
+
     struct SNode_CSR {
         explicit SNode_CSR(node_key_t key) : key{key} {}
 
         node_key_t key;
         SNode_CSR* parent = nullptr;
         SNode_CSR* skip = nullptr;
-        std::set<SNode_CSR*> children;
+        std::set<SNode_CSR*, SNodeKeyLess> children;
     };
 
     SNode_CSR* getOrCreateNode(node_key_t key);
@@ -58,7 +67,14 @@ private:
 
 private:
     std::unordered_map<node_key_t, std::unique_ptr<SNode_CSR>> nodes;
+    DeleteDiagnostics lastDeleteDiagnostics_;
 };
+
+inline bool STree_CSR::SNodeKeyLess::operator()(
+    const SNode_CSR* a, const SNode_CSR* b) const {
+    return a->key < b->key;
+}
+
 
 } // namespace algo_extension
 } // namespace kuzu

@@ -1,0 +1,109 @@
+-DATASET CSV EMPTY
+
+--
+
+# Expected answers are what each transaction's own view of the graph gives.
+# Base-table and path checks show what LadybugDB does; the connectivity checks
+# are the target for the index, and may fail on the current branch.
+
+-CASE MvccVisibility
+-LOAD_DYNAMIC_EXTENSION algo
+-STATEMENT CALL auto_checkpoint=false
+---- ok
+-STATEMENT CREATE NODE TABLE Person(id INT64 PRIMARY KEY);
+---- ok
+-STATEMENT CREATE REL TABLE Knows(FROM Person TO Person);
+---- ok
+-STATEMENT UNWIND range(0, 2) AS i CREATE (:Person {id: i});
+---- ok
+# The index calls below use offsets; they must equal the ids.
+-STATEMENT MATCH (p:Person) RETURN p.id, OFFSET(ID(p)) ORDER BY p.id;
+---- 3
+0|0
+1|1
+2|2
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 1}) CREATE (a)-[:Knows]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 1}), (b:Person {id: 2}) CREATE (a)-[:Knows]->(b);
+---- ok
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc', 'dtree') RETURN *;
+---- 1
+Dynamic connectivity index dc has been created with 2 edges.
+# 1. Old reader starts while both edges exist.
+-CREATE_CONNECTION connOldReader
+-STATEMENT [connOldReader] BEGIN TRANSACTION READ ONLY;
+---- ok
+# 2. Writer deletes (1,2), not yet committed.
+-CREATE_CONNECTION connWriter
+-STATEMENT [connWriter] BEGIN TRANSACTION;
+---- ok
+-STATEMENT [connWriter] MATCH (:Person {id: 1})-[e:Knows]->(:Person {id: 2}) DELETE e;
+---- ok
+# 3. A second writer is refused.
+-CREATE_CONNECTION connWriter2
+-STATEMENT [connWriter2] BEGIN TRANSACTION;
+---- error
+Cannot start a new write transaction in the system. Only one write transaction at a time is allowed in the system.
+# 4. Before commit: what each side sees.
+-STATEMENT [connWriter] MATCH ()-[e:Knows]->() RETURN count(*);
+---- 1
+1
+-STATEMENT [connWriter] MATCH (:Person {id: 0})-[:Knows* SHORTEST 1..4]-(:Person {id: 2}) RETURN count(*) > 0;
+---- 1
+False
+-STATEMENT [connWriter] CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 2, 'dc') RETURN *;
+---- 1
+False
+-STATEMENT [connOldReader] MATCH ()-[e:Knows]->() RETURN count(*);
+---- 1
+2
+-STATEMENT [connOldReader] CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 2, 'dc') RETURN *;
+---- 1
+True
+# 5. Commit.
+-STATEMENT [connWriter] COMMIT;
+---- ok
+# 6. After commit: old reader keeps its snapshot; a new reader sees the commit.
+-STATEMENT [connOldReader] MATCH ()-[e:Knows]->() RETURN count(*);
+---- 1
+2
+-STATEMENT [connOldReader] MATCH (:Person {id: 0})-[:Knows* SHORTEST 1..4]-(:Person {id: 2}) RETURN count(*) > 0;
+---- 1
+True
+-STATEMENT [connOldReader] CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 2, 'dc') RETURN *;
+---- 1
+True
+-CREATE_CONNECTION connNewReader
+-STATEMENT [connNewReader] MATCH ()-[e:Knows]->() RETURN count(*);
+---- 1
+1
+-STATEMENT [connNewReader] CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 2, 'dc') RETURN *;
+---- 1
+False
+-STATEMENT [connOldReader] COMMIT;
+---- ok
+# 7. Rollback: writer deletes (0,1) and inserts (0,2), then rolls back.
+-STATEMENT [connWriter] BEGIN TRANSACTION;
+---- ok
+-STATEMENT [connWriter] MATCH (:Person {id: 0})-[e:Knows]->(:Person {id: 1}) DELETE e;
+---- ok
+-STATEMENT [connWriter] MATCH (a:Person {id: 0}), (b:Person {id: 2}) CREATE (a)-[:Knows]->(b);
+---- ok
+-STATEMENT [connWriter] MATCH (a)-[e:Knows]->(b) RETURN a.id, b.id;
+---- 1
+0|2
+-STATEMENT [connWriter] CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 2, 'dc') RETURN *;
+---- 1
+True
+-STATEMENT [connWriter] ROLLBACK;
+---- ok
+-STATEMENT MATCH (a)-[e:Knows]->(b) RETURN a.id, b.id;
+---- 1
+0|1
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 1, 'dc') RETURN *;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 2, 'dc') RETURN *;
+---- 1
+False
+

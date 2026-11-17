@@ -2,13 +2,19 @@
 #include "common/stree_csr.h"
 #include "common/exception/exception.h"
 
+#include <chrono>
 #include <queue>
 #include <set>
+
+#include "common/dc_runtime_profile.h"
+namespace dcprof = kuzu::common::dc_profile;
 
 namespace kuzu {
 namespace algo_extension {
 
 STree_CSR::SNode_CSR* STree_CSR::getOrCreateNode(node_key_t key) {
+    dcprof::Scope dcPhase{dcprof::Phase::NodeLookup};
+
     auto [it, inserted] = nodes.try_emplace(key, nullptr);
     if (inserted) {
         it->second = std::make_unique<SNode_CSR>(key);
@@ -17,6 +23,8 @@ STree_CSR::SNode_CSR* STree_CSR::getOrCreateNode(node_key_t key) {
 }
 
 STree_CSR::SNode_CSR* STree_CSR::getNode(node_key_t key) const {
+    dcprof::Scope dcPhase{dcprof::Phase::NodeLookup};
+
     auto it = nodes.find(key);
     return it == nodes.end() ? nullptr : it->second.get();
 }
@@ -30,26 +38,38 @@ uint64_t STree_CSR::getNumNodes() const {
 }
 
 STree_CSR::SNode_CSR* STree_CSR::findRoot(SNode_CSR* node) {
+    dcprof::Scope dcPhase{dcprof::Phase::RootWalk};
+
     while (node->parent != nullptr) {
+        dcprof::count(dcprof::Counter::RootSteps);
         node = node->skip != nullptr ? node->skip : node->parent;
     }
     return node;
 }
 
 void STree_CSR::insertEdge(node_key_t u, node_key_t v) {
+    dcprof::Event dcEvent{"index_insert", "stree_csr", u, v};
+    dcprof::Scope dcClassify{dcprof::Phase::Classify};
+
     auto uNode = getOrCreateNode(u);
     auto vNode = getOrCreateNode(v);
 
     if (uNode->parent == vNode || vNode->parent == uNode) {
+        dcprof::kind("duplicate");
         return;
     }
 
+    dcprof::kind("non_tree");
     if (findRoot(uNode) != findRoot(vNode)) {
+        dcClassify.stop();
+        dcprof::kind("tree");
         insertTreeEdge(u, v);
     } 
 }
 
 void STree_CSR::insertTreeEdge(node_key_t u, node_key_t v) {
+    dcprof::Scope dcPhase{dcprof::Phase::Link};
+
     auto ch = reroot(getOrCreateNode(u));
     auto vNode = getOrCreateNode(v);
     ch->parent = vNode;
@@ -79,6 +99,8 @@ void STree_CSR::insertTreeEdge(node_key_t u, node_key_t v) {
 }
 
 STree_CSR::SNode_CSR* STree_CSR::reroot(SNode_CSR* node) {
+    dcprof::Scope dcPhase{dcprof::Phase::Reroot};
+
     if (node->parent == nullptr) {
         node->skip = nullptr;
         return node;
@@ -130,6 +152,10 @@ void STree_CSR::deleteEdge(
     node_key_t u,
     node_key_t v,
     const NeighborProvider& getNeighbors) {
+    dcprof::Event dcEvent{"index_delete", "stree_csr", u, v};
+    dcprof::Scope dcClassify{dcprof::Phase::Classify};
+
+    lastDeleteDiagnostics_ = DeleteDiagnostics{};
     auto uNode = getNode(u);
     auto vNode = getNode(v);
     if (uNode == nullptr || vNode == nullptr) {
@@ -137,11 +163,15 @@ void STree_CSR::deleteEdge(
     }
 
     if (uNode->parent != vNode && vNode->parent != uNode) {
+        dcprof::kind("non_tree");
+        lastDeleteDiagnostics_.edgeKind = DeleteDiagnostics::EdgeKind::NON_TREE;
         return;
     } else if (uNode->parent == vNode) {
+        dcClassify.stop();
         deleteTreeEdge(v, u, getNeighbors);
         return;
     } else if (vNode->parent == uNode) {
+        dcClassify.stop();
         deleteTreeEdge(u, v, getNeighbors);
     } else {
         throw kuzu::common::Exception("An error occurs in STree_CSR::deleteEdge.");
@@ -149,12 +179,19 @@ void STree_CSR::deleteEdge(
 }
 
 void STree_CSR::deleteTreeEdge(node_key_t parent, node_key_t child, const NeighborProvider& getNeighbors) {
+    dcprof::Scope dcClassify{dcprof::Phase::Classify};
+
     auto parentNode = getNode(parent);
     auto childNode = getNode(child);
     if (parentNode == nullptr || childNode == nullptr || childNode->parent != parentNode) {
         return;
     }
+    lastDeleteDiagnostics_.edgeKind = DeleteDiagnostics::EdgeKind::TREE;
+    lastDeleteDiagnostics_.replacementSearchTriggered = true;
 
+    dcClassify.stop();
+    dcprof::kind("tree");
+    dcprof::Scope dcCut{dcprof::Phase::Cut};
     parentNode->children.erase(childNode);
     if (parentNode->children.size() == 1) {
         auto temp = parentNode;
@@ -183,8 +220,16 @@ void STree_CSR::deleteTreeEdge(node_key_t parent, node_key_t child, const Neighb
         grandChild->skip = nullptr;
     }
 
+    dcCut.stop();
+    const auto searchStart = std::chrono::steady_clock::now();
     auto [connectedNode, nteNeighbor] = searchReplacement(childNode, getNeighbors);
+    lastDeleteDiagnostics_.replacementSearchElapsedNs =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - searchStart).count();
     if (nteNeighbor != nullptr) {
+        dcprof::Scope dcInstall{dcprof::Phase::ReplacementInstall};
+        dcprof::count(dcprof::Counter::ReplacementFound);
+        lastDeleteDiagnostics_.replacementFound = true;
         insertTreeEdge(connectedNode->key, nteNeighbor->key);
     }
 }
@@ -192,6 +237,9 @@ void STree_CSR::deleteTreeEdge(node_key_t parent, node_key_t child, const Neighb
 std::pair<STree_CSR::SNode_CSR*, STree_CSR::SNode_CSR*> STree_CSR::searchReplacement(
     SNode_CSR* startNode,
     const NeighborProvider& getNeighbors) {
+    dcprof::Scope dcPhase{dcprof::Phase::Search};
+    dcprof::count(dcprof::Counter::Searches);
+
     if (startNode == nullptr) {
         return {nullptr, nullptr};
     }
@@ -201,10 +249,28 @@ std::pair<STree_CSR::SNode_CSR*, STree_CSR::SNode_CSR*> STree_CSR::searchReplace
     while (!q.empty()) {
         auto current = q.front();
         q.pop();
+        dcprof::count(dcprof::Counter::SearchVertices);
 
-        for (auto ngbrKey : getNeighbors(current->key)) {
+        const auto getNeighborsStart = std::chrono::steady_clock::now();
+        dcprof::Scope dcProvider{dcprof::Phase::Provider};
+        auto neighbors = getNeighbors(current->key);
+        dcProvider.stop();
+        dcprof::count(dcprof::Counter::NeighborIds, neighbors.size());
+        lastDeleteDiagnostics_.getNeighborsElapsedNs +=
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - getNeighborsStart).count();
+        ++lastDeleteDiagnostics_.getNeighborsCallCount;
+        lastDeleteDiagnostics_.getNeighborsReturnedIdCount += neighbors.size();
+
+        for (auto ngbrKey : neighbors) {
+            dcprof::Scope dcCandidate{dcprof::Phase::Candidate};
+            dcprof::count(dcprof::Counter::Candidates);
+            ++lastDeleteDiagnostics_.replacementCandidatesScanned;
             auto ngbrNode = getNode(ngbrKey); 
-            KU_ASSERT(ngbrNode != nullptr);
+            if (ngbrNode == nullptr) {
+                throw kuzu::common::Exception(
+                    "Graph neighbor is absent from STree_CSR");
+            }
 
             if (ngbrNode == current) { // handling of self-loops.
                 continue;
@@ -240,6 +306,31 @@ bool STree_CSR::connected(node_key_t u, node_key_t v) const {
         return false;
     }
     return findRoot(uNode) == findRoot(vNode);
+}
+
+IndexMemoryFootprint STree_CSR::memoryFootprint() const {
+    IndexMemoryFootprint result;
+    result.numNodes = nodes.size();
+
+    result.bytesNodes =
+        sizeof(*this) +
+        memory_footprint_detail::mapBucketBytes<
+            node_key_t, std::unique_ptr<SNode_CSR>>(
+            nodes.bucket_count(), nodes.size()) +
+        nodes.size() *
+            (memory_footprint_detail::mapNodeBytes<
+                 node_key_t, std::unique_ptr<SNode_CSR>>() +
+             sizeof(SNode_CSR));
+
+    const auto setNodeBytes =
+        memory_footprint_detail::setNodeBytes<SNode_CSR*>();
+
+    for (const auto& [key, node] : nodes) {
+        result.numTreeEdges += node->children.size();
+    }
+
+    result.bytesEdges = result.numTreeEdges * setNodeBytes;
+    return result;
 }
 
 } // namespace algo_extension

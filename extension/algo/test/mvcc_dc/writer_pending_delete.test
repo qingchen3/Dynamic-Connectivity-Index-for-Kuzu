@@ -1,0 +1,101 @@
+-DATASET CSV EMPTY
+
+--
+
+# Does the writer's index query see its own pending deletion?
+#
+# Expected answers are what the CURRENT implementation returns, so this test
+# passes when the finding holds. Lines marked FINDING are where the current
+# answer differs from the transaction's own view of the graph.
+#
+# Run it under writer_pending_delete.gdb to see, in order, when the deletion is
+# marked, when the index is queried, and when the index is changed.
+
+-CASE WriterPendingDelete
+-LOAD_DYNAMIC_EXTENSION algo
+-STATEMENT CALL auto_checkpoint=false
+---- ok
+-STATEMENT CREATE NODE TABLE Person(id INT64 PRIMARY KEY);
+---- ok
+-STATEMENT CREATE REL TABLE Knows(FROM Person TO Person);
+---- ok
+-STATEMENT UNWIND range(0, 2) AS i CREATE (:Person {id: i});
+---- ok
+# The index calls use offsets; they must equal the ids.
+-STATEMENT MATCH (p:Person) RETURN p.id, OFFSET(ID(p)) ORDER BY p.id;
+---- 3
+0|0
+1|1
+2|2
+-STATEMENT MATCH (a:Person {id: 0}), (b:Person {id: 1}) CREATE (a)-[:Knows]->(b);
+---- ok
+-STATEMENT MATCH (a:Person {id: 1}), (b:Person {id: 2}) CREATE (a)-[:Knows]->(b);
+---- ok
+-STATEMENT CALL CREATE_DYNAMIC_CONNECTIVITY_INDEX('Person', 'Knows', 'dc', 'dtree') RETURN *;
+---- 1
+Dynamic connectivity index dc has been created with 2 edges.
+
+# 1. The committed graph and the index contain 0-1-2.
+-STATEMENT MATCH (a)-[:Knows]->(b) RETURN a.id, b.id;
+---- 2
+0|1
+1|2
+-STATEMENT MATCH (:Person {id: 0})-[:Knows* SHORTEST 1..4]-(:Person {id: 2}) RETURN count(*) > 0;
+---- 1
+True
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 2, 'dc') RETURN *;
+---- 1
+True
+
+# A reader that starts now, before the writer, as a control.
+-CREATE_CONNECTION connOldReader
+-STATEMENT [connOldReader] BEGIN TRANSACTION READ ONLY;
+---- ok
+
+# 2. connWriter deletes (1,2) inside its transaction.
+-CREATE_CONNECTION connWriter
+-STATEMENT [connWriter] BEGIN TRANSACTION;
+---- ok
+-STATEMENT [connWriter] MATCH (:Person {id: 1})-[e:Knows]->(:Person {id: 2}) DELETE e;
+---- ok
+
+# 3. The writer's graph scans see its pending deletion.
+-STATEMENT [connWriter] MATCH (a)-[:Knows]->(b) RETURN a.id, b.id;
+---- 1
+0|1
+-STATEMENT [connWriter] MATCH (:Person {id: 0})-[:Knows* SHORTEST 1..4]-(:Person {id: 2}) RETURN count(*) > 0;
+---- 1
+False
+# The deletion is pending, not committed: the other transaction still sees both edges.
+-STATEMENT [connOldReader] MATCH (a)-[:Knows]->(b) RETURN a.id, b.id;
+---- 2
+0|1
+1|2
+
+# 4. The writer's index query. FINDING: its own view says False.
+-STATEMENT [connWriter] CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 2, 'dc') RETURN *;
+---- 1
+True
+# Correct for the other transaction, and it must stay so until commit.
+-STATEMENT [connOldReader] CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 2, 'dc') RETURN *;
+---- 1
+True
+
+# 5. Commit. The index is changed here.
+-STATEMENT [connWriter] COMMIT;
+---- ok
+# A transaction starting after the commit: correct.
+-STATEMENT CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 2, 'dc') RETURN *;
+---- 1
+False
+# The reader that started before the commit still sees both edges...
+-STATEMENT [connOldReader] MATCH (:Person {id: 0})-[:Knows* SHORTEST 1..4]-(:Person {id: 2}) RETURN count(*) > 0;
+---- 1
+True
+# ...but the index now answers for the new graph. FINDING: its own view says True.
+-STATEMENT [connOldReader] CALL DYNAMIC_CONNECTIVITY_QUERY('Person', 0, 2, 'dc') RETURN *;
+---- 1
+False
+-STATEMENT [connOldReader] COMMIT;
+---- ok
+

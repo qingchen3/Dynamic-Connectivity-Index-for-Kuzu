@@ -9,7 +9,14 @@
 #include <string>
 #include <vector>
 
+
 namespace kuzu {
+
+namespace graph {
+    class OnDiskGraph;
+    class NbrScanState;
+}
+
 namespace algo_extension {
 
 class NativeDynamicConnectivityIndex final : public storage::Index {
@@ -63,9 +70,21 @@ private:
         common::RelDataDirection direction;
     };
 
+    struct IncidentScanTiming {
+        uint64_t graphSetupNs = 0;
+        uint64_t prepareScanNs = 0;
+        uint64_t forwardScanNs = 0;
+        uint64_t backwardScanNs = 0;
+        uint64_t relationshipDedupNs = 0;
+        uint64_t prepareCalls = 0;
+    };
+
     std::vector<IncidentRel> collectIncidentRels(
         main::ClientContext* context,
-        common::offset_t nodeOffset) const;
+        common::offset_t nodeOffset,
+        std::unique_ptr<graph::OnDiskGraph>& cachedGraph,
+        std::unique_ptr<graph::NbrScanState>& cachedScanState,
+        IncidentScanTiming& timing) const;
 
     static DynamicConnectivityIndex::node_key_t toBackendKey(
         common::offset_t offset);
@@ -73,7 +92,7 @@ private:
     DynamicConnectivityIndex::node_key_t toBackendKey(
         common::nodeID_t id) const;
     
-        common::nodeID_t makeNodeID(
+    common::nodeID_t makeNodeID(
         common::offset_t offset, common::table_id_t tableID);
 
 private:

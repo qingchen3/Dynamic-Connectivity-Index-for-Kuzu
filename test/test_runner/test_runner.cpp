@@ -1,3 +1,6 @@
+#include <cstdlib>
+#include <cstdio>
+#include <chrono>
 #include "test_runner/test_runner.h"
 
 #include <fstream>
@@ -92,7 +95,35 @@ void TestRunner::testStatement(TestStatement& statement, Connection& conn,
     replaceEnv(statement.query, "GCS_SECRET_ACCESS_KEY");
     replaceEnv(statement.query, "OLLAMA_URL");
     replaceEnv(statement.query, "RUN_ID");
+    // DC_E2E_TIMING: summaries exclude result comparison and log formatting.
+    const char* dcTimingSetting = std::getenv("DC_E2E_TIMING");
+    const bool dcTimingEnabled = dcTimingSetting &&
+        dcTimingSetting[0] == '1' && dcTimingSetting[1] == '\0';
+    const auto dcStatementStart = dcTimingEnabled ? std::chrono::steady_clock::now() :
+        std::chrono::steady_clock::time_point{};
     const auto actualResult = conn.query(statement.query);
+    if (dcTimingEnabled) {
+        // DC_E2E_TIMING_NULL_SUMMARY_GUARD: failed results may lack a summary.
+        const auto dcStatementEnd = std::chrono::steady_clock::now();
+        const auto* summary = actualResult->getQuerySummary();
+        const double wallMs = std::chrono::duration<double, std::milli>(
+            dcStatementEnd - dcStatementStart).count();
+        if (summary != nullptr) {
+            std::fprintf(stderr,
+                "DC_STATEMENT_TIMING success=%d compile_ms=%.17g execute_ms=%.17g wall_ms=%.17g\n",
+                actualResult->isSuccess() ? 1 : 0,
+                summary->getCompilingTime(), summary->getExecutionTime(), wallMs);
+        } else {
+            std::fprintf(stderr,
+                "DC_STATEMENT_TIMING success=%d compile_ms=nan execute_ms=nan "
+                "wall_ms=%.17g summary_present=0\n",
+                actualResult->isSuccess() ? 1 : 0, wallMs);
+        }
+        if (!actualResult->isSuccess()) {
+            std::fprintf(stderr, "DC_STATEMENT_ERROR query=%s error=%s\n",
+                statement.query.c_str(), actualResult->getErrorMessage().c_str());
+        }
+    }
     QueryResult* currentQueryResult = actualResult.get();
     idx_t resultIdx = 0u;
     do {

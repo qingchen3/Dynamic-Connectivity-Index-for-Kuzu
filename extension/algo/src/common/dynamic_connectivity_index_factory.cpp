@@ -1,9 +1,10 @@
 #include "common/dynamic_connectivity_index_factory.h"
 
-#include "common/dtree_index.h"
 #include "common/stree_index.h"
 #include "common/stree_csr_index.h"
+#include "common/dtree_index.h"
 #include "common/dtree_csr_index.h"
+#include "common/dtree_lazy_nte_index.h"
 
 #include <algorithm>
 #include <cctype>
@@ -17,16 +18,20 @@ std::unique_ptr<DynamicConnectivityIndex> createDynamicConnectivityIndex(const s
     std::transform(normalizedMethod.begin(), normalizedMethod.end(), normalizedMethod.begin(),
         [](unsigned char c) { return std::tolower(c); });
 
-    if (normalizedMethod == "stree") {
-        return std::make_unique<STreeIndex>();
-    }
-
     if (normalizedMethod == "dtree") {
         return std::make_unique<DTreeIndex>();
     }
 
     if (normalizedMethod == "dtree_csr") {
         return std::make_unique<DTreeCSRIndex>();
+    }
+
+    if (normalizedMethod == "dtree_lazy_nte") {
+        return std::make_unique<DTreeLazyNTEIndex>();
+    }
+
+    if (normalizedMethod == "stree") {
+        return std::make_unique<STreeIndex>();
     }
 
     if (normalizedMethod == "stree_csr") {
