@@ -28,6 +28,14 @@ public:
         return stree_csr.connected(u, v);
     }
 
+    void rootPath(node_key_t key, std::vector<node_key_t>& path) const override {
+        stree_csr.rootPath(key, path);
+    }
+
+    bool connectedReadOnly(node_key_t u, node_key_t v) const override {
+        return stree_csr.connected(u, v);
+    }
+
     bool containsNode(node_key_t key) const override {
         return stree_csr.containsNode(key);
     }
