@@ -8,6 +8,7 @@
 #endif
 
 #include <cstdint>
+#include <vector>
 #include <memory>
 #include <set>
 #include <tuple>
@@ -81,6 +82,7 @@ public:
     void insertEdge(node_key_t u, node_key_t v);
     void deleteEdge(node_key_t u, node_key_t v);
     bool connected(node_key_t u, node_key_t v) const;
+    void rootPath(node_key_t key, std::vector<node_key_t>& path) const;
     bool containsNode(node_key_t key) const;
     uint64_t getNumNodes() const;
     IndexMemoryFootprint memoryFootprint() const;

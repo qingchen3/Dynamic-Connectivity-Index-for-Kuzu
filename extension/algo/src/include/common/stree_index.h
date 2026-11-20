@@ -32,6 +32,14 @@ public:
         return stree.connected(u, v);
     }
 
+    void rootPath(node_key_t key, std::vector<node_key_t>& path) const override {
+        stree.rootPath(key, path);
+    }
+
+    bool connectedReadOnly(node_key_t u, node_key_t v) const override {
+        return stree.connected(u, v);
+    }
+
     bool containsNode(node_key_t key) const override {
         return stree.containsNode(key);
     }
