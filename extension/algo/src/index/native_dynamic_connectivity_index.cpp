@@ -5,9 +5,13 @@
 #include "catalog/catalog.h"
 #include "graph/on_disk_graph.h"
 #include "common/exception/runtime.h"
+#include "transaction/transaction.h"
 #include <limits>
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <set>
+#include <unordered_set>
 #include <vector>
 #include <tuple>
 #include <cstdio>
@@ -81,6 +85,7 @@ common::nodeID_t NativeDynamicConnectivityIndex::makeNodeID(
 }
 
 void NativeDynamicConnectivityIndex::insertEdge(common::nodeID_t src, common::nodeID_t dst) {
+    std::unique_lock lock{mtx};
     backend->insertEdge(toBackendKey(src), toBackendKey(dst));
 }
 
@@ -88,6 +93,7 @@ void NativeDynamicConnectivityIndex::deleteEdge(
     common::nodeID_t src,
     common::nodeID_t dst,
     const DynamicConnectivityIndex::NeighborProvider& getNeighbors) {
+    std::unique_lock lock{mtx};
     backend->deleteEdge(
         toBackendKey(src),
         toBackendKey(dst),
@@ -95,7 +101,44 @@ void NativeDynamicConnectivityIndex::deleteEdge(
 }
 
 bool NativeDynamicConnectivityIndex::connected(common::nodeID_t src, common::nodeID_t dst) const {
-    return backend->connected(toBackendKey(src), toBackendKey(dst));
+    const auto u = toBackendKey(src);
+    const auto v = toBackendKey(dst);
+    if (backend->queryRestructures()) {
+        // This query rewrites the forest, so it needs it to itself.
+        std::unique_lock lock{mtx};
+        return backend->connected(u, v);
+    }
+    // This query only reads: queries share the forest.
+    std::shared_lock lock{mtx};
+    return backend->connected(u, v);
+}
+
+void NativeDynamicConnectivityIndex::setBuildTimestamp(common::transaction_t startTS) {
+    std::unique_lock lock{mtx};
+    lastChangeTS = startTS;
+    lastDeleteTS = startTS;
+}
+
+std::vector<common::offset_t> NativeDynamicConnectivityIndex::neighborsInView(
+    main::ClientContext* context, common::offset_t nodeOffset,
+    std::unique_ptr<graph::OnDiskGraph>& cachedGraph,
+    std::unique_ptr<graph::NbrScanState>& cachedScanState) const {
+    IncidentScanTiming timing{};
+}
+
+bool NativeDynamicConnectivityIndex::connectedBySearch(main::ClientContext* context,
+    common::offset_t src, common::offset_t dst,
+    std::unique_ptr<graph::OnDiskGraph>& cachedGraph,
+    std::unique_ptr<graph::NbrScanState>& cachedScanState) const {
+    if (src == dst) {
+        return true;
+    }
+    return false;
+}
+
+bool NativeDynamicConnectivityIndex::connected(main::ClientContext* context,
+    common::nodeID_t src, common::nodeID_t dst) const {
+
 }
 
 bool NativeDynamicConnectivityIndex::isBackedByRelTable(
@@ -234,6 +277,7 @@ NativeDynamicConnectivityIndex::collectIncidentRels(
 
 void NativeDynamicConnectivityIndex::commitRelInsert(common::offset_t srcNodeOffset,
     common::offset_t dstNodeOffset) {
+    std::unique_lock lock{mtx};
     backend->insertEdge(
         toBackendKey(srcNodeOffset), 
         toBackendKey(dstNodeOffset));
@@ -245,7 +289,13 @@ void NativeDynamicConnectivityIndex::commitRelInsert(
     common::offset_t dstNodeOffset, 
     common::internalID_t relID) {
     KU_ASSERT(relID.tableID == sourceRelTableID);
-    commitRelInsert(srcNodeOffset, dstNodeOffset);
+    // Stamp the commit time before the change, under the same lock, so no
+    // reader can mistake a half-applied commit for its own snapshot.
+    std::unique_lock lock{mtx};
+    lastChangeTS = transaction::Transaction::Get(*context)->getCommitTS();
+    backend->insertEdge(
+        toBackendKey(srcNodeOffset),
+        toBackendKey(dstNodeOffset));
 }
 
 void NativeDynamicConnectivityIndex::commitRelDelete(
@@ -254,7 +304,12 @@ void NativeDynamicConnectivityIndex::commitRelDelete(
     common::offset_t dstNodeOffset,
     common::internalID_t relID) {
     KU_ASSERT(relID.tableID == sourceRelTableID);
-    
+
+    // As in commitRelInsert: stamp first, under the lock that guards the change.
+    std::unique_lock lock{mtx};
+    lastChangeTS = transaction::Transaction::Get(*context)->getCommitTS();
+    lastDeleteTS = lastChangeTS;
+
     uint64_t collectIncidentNs = 0;
     uint64_t uniqueNeighborsNs = 0;
     IncidentScanTiming scanTiming{};
