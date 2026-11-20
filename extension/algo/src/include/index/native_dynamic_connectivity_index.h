@@ -6,6 +6,7 @@
 #include "common/types/types.h"
 
 #include <memory>
+#include <shared_mutex>
 #include <string>
 #include <vector>
 
@@ -40,6 +41,11 @@ public:
     void insertEdge(common::nodeID_t src, common::nodeID_t dst);
     void deleteEdge(common::nodeID_t src, common::nodeID_t dst, const DynamicConnectivityIndex::NeighborProvider& getNeighbors);
     bool connected(common::nodeID_t src, common::nodeID_t dst) const;
+
+    bool connected(main::ClientContext* context, common::nodeID_t src,
+        common::nodeID_t dst) const;
+
+    void setBuildTimestamp(common::transaction_t startTS);
     
     static constexpr const char* TYPE_NAME = "DYNAMIC_CONNECTIVITY";
     
@@ -95,10 +101,23 @@ private:
     common::nodeID_t makeNodeID(
         common::offset_t offset, common::table_id_t tableID);
 
+    std::vector<common::offset_t> neighborsInView(main::ClientContext* context,
+        common::offset_t nodeOffset, std::unique_ptr<graph::OnDiskGraph>& cachedGraph,
+        std::unique_ptr<graph::NbrScanState>& cachedScanState) const;
+
+    // Breadth-first search over storage
+    bool connectedBySearch(main::ClientContext* context, common::offset_t src,
+        common::offset_t dst, std::unique_ptr<graph::OnDiskGraph>& cachedGraph,
+        std::unique_ptr<graph::NbrScanState>& cachedScanState) const;
+
 private:
     common::table_id_t sourceRelTableID;
     common::table_id_t nodeTableID;
     std::unique_ptr<DynamicConnectivityIndex> backend;
+
+    mutable std::shared_mutex mtx;
+    common::transaction_t lastChangeTS = 0;
+    common::transaction_t lastDeleteTS = 0;
 };
 
 } // namespace algo_extension
