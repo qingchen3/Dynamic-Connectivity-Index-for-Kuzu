@@ -123,7 +123,46 @@ std::vector<common::offset_t> NativeDynamicConnectivityIndex::neighborsInView(
     main::ClientContext* context, common::offset_t nodeOffset,
     std::unique_ptr<graph::OnDiskGraph>& cachedGraph,
     std::unique_ptr<graph::NbrScanState>& cachedScanState) const {
-    IncidentScanTiming timing{};
+
+    if (!cachedGraph) {
+        const auto transaction = transaction::Transaction::Get(*context);
+        const auto catalog = catalog::Catalog::Get(*context);
+        const auto relTable = storage::StorageManager::Get(*context)
+                                  ->getTable(sourceRelTableID)
+                                  ->ptrCast<storage::RelTable>();
+        auto nodeEntry = catalog->getTableCatalogEntry(transaction, indexInfo.tableID);
+        auto relGroupEntry =
+            catalog->getTableCatalogEntry(transaction, relTable->getRelGroupID());
+        graph::NativeGraphEntry graphEntry{
+            std::vector<catalog::TableCatalogEntry*>{nodeEntry},
+            std::vector<catalog::TableCatalogEntry*>{relGroupEntry}};
+        cachedGraph = std::make_unique<graph::OnDiskGraph>(context, std::move(graphEntry));
+        cachedScanState = cachedGraph->prepareRelScan(*relGroupEntry, sourceRelTableID,
+            indexInfo.tableID, {}, true /* randomLookup */);
+    }
+
+    std::vector<common::offset_t> neighbors_offsets;
+
+    auto collect =
+        [&](graph::Graph::EdgeIterator iterator) {
+            for (auto chunk : iterator) {
+                chunk.forEach(
+                    [&](auto nbrs, auto , auto i) {
+                        neighbors_offsets.push_back(nbrs[i].offset);
+                    });
+            }
+        };
+    
+    collect(
+        cachedGraph->scanFwd({nodeOffset, indexInfo.tableID}, *cachedScanState),
+        common::RelDataDirection::FWD);
+    
+    collect(
+        cachedGraph->scanBwd({nodeOffset, indexInfo.tableID}, *cachedScanState),
+        common::RelDataDirection::BWD);
+
+    return neighbors_offsets;
+    
 }
 
 bool NativeDynamicConnectivityIndex::connectedBySearch(main::ClientContext* context,
