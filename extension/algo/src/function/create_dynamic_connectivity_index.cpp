@@ -179,7 +179,10 @@ static offset_t tableFunc(
         bindData->relGroupID,
         bindData->relTableID,
         *index);
-    
+    // The build read the graph as this transaction sees it.
+    index->setBuildTimestamp(
+        transaction::Transaction::Get(*input.context->clientContext)->getStartTS());
+
     auto nodeTable =
         storage::StorageManager::Get(*input.context->clientContext)
             ->getTable(bindData->nodeTableID)
