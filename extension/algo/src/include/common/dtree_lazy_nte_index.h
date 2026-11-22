@@ -24,6 +24,14 @@ public:
         return dtree.connected(u, v);
     }
 
+    bool queryRestructures() const override {
+        return true;
+    }
+
+    void rootPath(node_key_t key, std::vector<node_key_t>& path) const override {
+        dtree.rootPath(key, path);
+    }
+
     bool containsNode(node_key_t key) const override {
         return dtree.containsNode(key);
     }
