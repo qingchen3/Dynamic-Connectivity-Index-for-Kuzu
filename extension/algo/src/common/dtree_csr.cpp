@@ -411,6 +411,17 @@ bool DTree_CSR::connected(node_key_t u, node_key_t v) const {
     return dtreeCSR_internal::query(uIt->second, vIt->second) != 0;
 }
 
+void DTree_CSR::rootPath(node_key_t key, std::vector<node_key_t>& path) const {
+    path.push_back(key);
+    const auto it = nodes.find(toInternalKey(key));
+    if (it == nodes.end()) {
+        return;
+    }
+    for (auto node = it->second->parent; node != nullptr; node = node->parent) {
+        path.push_back(node->key);
+    }
+}
+
 bool DTree_CSR::containsNode(node_key_t key) const {
     return nodes.find(toInternalKey(key)) != nodes.end();
 }
