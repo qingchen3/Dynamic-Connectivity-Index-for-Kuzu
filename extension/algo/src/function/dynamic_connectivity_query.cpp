@@ -89,7 +89,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
     auto dstNodeID = makeNodeID(bindData->dst, bindData->nodeTableID);
 
     const auto isConnected =
-        index.connected(srcNodeID, dstNodeID);
+        index.connected(input.context->clientContext, srcNodeID, dstNodeID);
 
     auto& outputVector = output.dataChunk.getValueVectorMutable(0);
     auto pos = output.dataChunk.state->getSelVector()[0];
