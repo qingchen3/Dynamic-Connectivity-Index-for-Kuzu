@@ -168,6 +168,10 @@ public:
     void detachDelete(transaction::Transaction* transaction, RelTableDeleteState* deleteState);
     bool checkIfNodeHasRels(transaction::Transaction* transaction,
         common::RelDataDirection direction, common::ValueVector* srcNodeIDVector) const;
+
+    bool hasUncommittedInserts(const transaction::Transaction* transaction) const;
+    bool hasUncommittedDeletes(const transaction::Transaction* transaction) const;
+
     void throwIfNodeHasRels(transaction::Transaction* transaction,
         common::RelDataDirection direction, common::ValueVector* srcNodeIDVector,
         const rel_multiplicity_constraint_throw_func_t& throwFunc) const;
