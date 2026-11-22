@@ -298,6 +298,17 @@ bool STree::connected(node_key_t u, node_key_t v) const {
     return findRoot(uNode) == findRoot(vNode);
 }
 
+void STree::rootPath(node_key_t key, std::vector<node_key_t>& path) const {
+    path.push_back(key);
+    const auto node = getNode(key);
+    if (node == nullptr) {
+        return;
+    }
+    for (auto cur = node->parent; cur != nullptr; cur = cur->parent) {
+        path.push_back(cur->key);
+    }
+}
+
 IndexMemoryFootprint STree::memoryFootprint() const {
     IndexMemoryFootprint result;
     result.numNodes = nodes.size();
