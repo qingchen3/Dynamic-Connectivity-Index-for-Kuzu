@@ -379,6 +379,16 @@ bool RelTable::checkIfNodeHasRels(Transaction* transaction, RelDataDirection dir
     return hasRels;
 }
 
+bool RelTable::hasUncommittedInserts(const Transaction* transaction) const {
+    const auto localTable = transaction->getLocalStorage()->getLocalTable(tableID);
+    return localTable && !localTable->cast<LocalRelTable>().isEmpty();
+}
+
+bool RelTable::hasUncommittedDeletes(const Transaction* transaction) const {
+    const auto localTable = transaction->getLocalStorage()->getLocalTable(tableID);
+    return localTable && !localTable->cast<LocalRelTable>().pendingRelDeletes.empty();
+}
+
 void RelTable::throwIfNodeHasRels(Transaction* transaction, RelDataDirection direction,
     ValueVector* srcNodeIDVector, const rel_multiplicity_constraint_throw_func_t& throwFunc) const {
     const auto nodeIDPos = srcNodeIDVector->state->getSelVector()[0];
