@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <chrono>
 #include <stdexcept>
+#include <queue>
 
 #include "common/dc_runtime_profile.h"
 namespace dcprof = kuzu::common::dc_profile;
@@ -168,9 +169,25 @@ std::vector<common::offset_t> NativeDynamicConnectivityIndex::neighborsInView(
 bool NativeDynamicConnectivityIndex::connectedBySearch(main::ClientContext* context,
     common::offset_t src, common::offset_t dst,
     std::unique_ptr<graph::OnDiskGraph>& cachedGraph,
-    std::unique_ptr<graph::NbrScanState>& cachedScanState) const {
+    std::unique_ptr<graph::NbrScanState>& cachedScanState) const { // search by BFS
     if (src == dst) {
         return true;
+    }
+    std::unordered_set<common::offset_t> visited {src};
+    std::queue<common::offset_t> queue;
+    queue.push(src);
+    while (!queue.empty()) {
+        auto current = queue.front();
+        queue.pop();
+        auto neighbors = neighborsInView(context, current, cachedGraph, cachedScanState);
+        for (auto neighbor : neighbors) {
+            if (neighbor == dst) {
+                return true;
+            }
+            if (visited.insert(neighbor).second) {  // true only the first time
+                queue.push(neighbor);
+            }
+        }
     }
     return false;
 }
